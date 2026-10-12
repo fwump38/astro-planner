@@ -225,7 +225,8 @@ def _write_cache(path: Path, data: bytes) -> None:
 
 def _filter_dump(blob: bytes, points: list[Observer], radius_km: float) -> list[Place]:
     with zipfile.ZipFile(io.BytesIO(blob)) as z, z.open(GEONAMES_MEMBER) as f:
-        return parse_geonames(io.TextIOWrapper(f, encoding="utf-8"), points, radius_km)
+        # Read a margin beyond the radius: a big city just outside it must still absorb its suburbs inside it before the radius is applied.
+        return parse_geonames(io.TextIOWrapper(f, encoding="utf-8"), points, radius_km + METRO_RADIUS_KM)
 
 
 async def _geonames_places(hass: HomeAssistant, points: list[Observer], radius_km: float) -> list[Place]:
@@ -251,7 +252,7 @@ async def _geonames_places(hass: HomeAssistant, points: list[Observer], radius_k
 
 async def _wikidata_places(hass: HomeAssistant, points: list[Observer], radius_km: float) -> list[Place]:
     session = async_get_clientsession(hass)
-    params = {"format": "json", "query": wikidata_query(bounding_box(points, radius_km))}
+    params = {"format": "json", "query": wikidata_query(bounding_box(points, radius_km + METRO_RADIUS_KM))}
     async with asyncio.timeout(QUERY_TIMEOUT):
         resp = await session.get(WIKIDATA_URL, params=params, headers={"User-Agent": USER_AGENT, "Accept": "application/sparql-results+json"})
         resp.raise_for_status()

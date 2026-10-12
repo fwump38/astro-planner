@@ -192,3 +192,18 @@ async def test_websocket_lookup_and_stored_domes(hass: HomeAssistant, hass_ws_cl
     await client.send_json_auto_id({"type": "milky_way_planner/find_light_domes", "points": [{"latitude": 36.06, "longitude": -107.96}], "radius_km": 250})
     res = (await client.receive_json())["result"]
     assert res["source"] == "geonames" and {d["name"] for d in res["domes"]} == {"Albuquerque", "Santa Fe"}
+
+
+async def test_metro_outside_the_radius_still_absorbs_suburbs_inside_it(hass: HomeAssistant, aioclient_mock, no_cache):
+    """A big city just beyond the radius must fold in its suburbs that fall inside it (like Las Vegas for a site near Kanab)."""
+    site = Observer(37.0, -112.5)
+    # Centre ~262 km east of the site (outside 250); the suburb is ~12 km nearer the site (inside 250) and within 20 km of the centre.
+    centre_lon = -112.5 + 262 / (111.32 * 0.7986)
+    suburb_lon = centre_lon - 12 / (111.32 * 0.7986)
+    rows = [row("Bigville", 37.0, centre_lon, 900000), row("Suburbia", 37.0, suburb_lon, 120000)]
+    aioclient_mock.get(cities.GEONAMES_URL, content=_zip(rows))
+    result = await async_find_domes(hass, [site], 250)
+    assert "Suburbia" not in {d.name for d in result.domes}  # absorbed into Bigville, which is beyond the radius
+    # With a larger radius the merged metro appears once, with the combined population.
+    result = await async_find_domes(hass, [site], 300)
+    assert [(d.name, d.population) for d in result.domes] == [("Bigville", 1020000)]
