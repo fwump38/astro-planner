@@ -7,10 +7,12 @@ import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.util import dt as dt_util
 
 from .cities import cache_path
+from .const import DOMAIN
 from .config import build_config
 from .coordinator import LiveCoordinator, PlannerCoordinator
 from .drive import DriveTimes
@@ -20,6 +22,7 @@ from .services import async_register_services
 from .websocket_api import async_register_websocket
 
 _LOGGER = logging.getLogger(__name__)
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 PLATFORMS = [Platform.BINARY_SENSOR, Platform.CALENDAR, Platform.EVENT, Platform.SENSOR]
 
 
