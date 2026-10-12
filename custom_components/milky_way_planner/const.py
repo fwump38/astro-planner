@@ -1,0 +1,52 @@
+"""Constants for Milky Way Planner."""
+
+DOMAIN = "milky_way_planner"
+API_VERSION = 1
+
+CONF_SITES = "sites"
+CONF_ENTITY = "entity"
+CONF_NAME = "name"
+CONF_BORTLE = "bortle"
+CONF_DRIVE_MINUTES = "drive_minutes"
+CONF_LATITUDE = "latitude"
+CONF_LONGITUDE = "longitude"
+CONF_MIN_GC_ALTITUDE = "min_gc_altitude"
+CONF_MAX_MOON = "max_moon_illumination"
+CONF_CAL_MIN_ALTITUDE = "calendar_min_altitude"
+CONF_CAL_BEST_MINUTES = "calendar_best_minutes"
+CONF_WEIGHTS = "weights"
+CONF_LIGHT_DOMES = "light_domes"
+CONF_DOME_SIGMA = "dome_sigma"
+CONF_DOME_WARNING = "dome_warning_threshold"
+CONF_NIGHTS = "nights"
+CONF_GOOD_SCORE = "good_score_threshold"
+CONF_AUTO_DRIVE = "auto_drive_time"
+
+DEFAULT_BORTLE = 3
+DEFAULTS = {
+    CONF_MIN_GC_ALTITUDE: 10,
+    CONF_MAX_MOON: 10,
+    CONF_CAL_MIN_ALTITUDE: 0,
+    CONF_CAL_BEST_MINUTES: 180,
+    CONF_DOME_SIGMA: 25,
+    CONF_DOME_WARNING: 0.15,
+    CONF_NIGHTS: 7,
+    CONF_GOOD_SCORE: 70,
+    CONF_AUTO_DRIVE: True,
+}
+
+FORECAST_REFRESH_MINUTES = 30
+LIVE_REFRESH_SECONDS = 60
+# How far ahead the calendars, "next good night" lookups and window events search.
+SEARCH_DAYS = 400
+
+# Pink = a full-length window, blue = a short one (Capture the Atlas's colour rule).
+GRADE_BEST = "best"
+GRADE_SHORT = "short"
+COLOR_BEST = "#e91e8c"
+COLOR_SHORT = "#2196f3"
+
+EVENT_WINDOW_START = "window_start"
+EVENT_WINDOW_END = "window_end"
+EVENT_FORECAST_GOOD = "forecast_good"
+EVENT_FORECAST_DROPPED = "forecast_dropped"

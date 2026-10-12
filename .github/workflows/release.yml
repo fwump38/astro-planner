@@ -1,0 +1,27 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check tag matches manifest version
+        run: |
+          v="v$(python3 -c "import json; print(json.load(open('custom_components/milky_way_planner/manifest.json'))['version'])")"
+          [ "$v" = "${GITHUB_REF_NAME}" ] || { echo "Tag ${GITHUB_REF_NAME} does not match manifest version ${v}" >&2; exit 1; }
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -r requirements-test.txt
+      - run: pytest tests -q
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true

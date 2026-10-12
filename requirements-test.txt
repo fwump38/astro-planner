@@ -1,0 +1,3 @@
+pytest-homeassistant-custom-component
+astronomy-engine==2.1.19
+ruff
