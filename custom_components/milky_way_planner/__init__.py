@@ -12,8 +12,8 @@ from homeassistant.helpers.typing import ConfigType
 from homeassistant.util import dt as dt_util
 
 from .cities import cache_path
-from .const import DOMAIN
 from .config import build_config
+from .const import DOMAIN
 from .coordinator import LiveCoordinator, PlannerCoordinator
 from .drive import DriveTimes
 from .engine import Engine
