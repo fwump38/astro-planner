@@ -10,6 +10,8 @@ It builds on [AstroWeather](https://github.com/mawinkler/astroweather) for the f
 
 ## Install
 
+[![Open your Home Assistant instance and open this repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=fwump38&repository=milky-way-planner&category=integration)
+
 1. HACS → ⋮ → **Custom repositories** → add `https://github.com/fwump38/milky-way-planner` as an **Integration**.
 2. Install **Milky Way Planner** and restart Home Assistant.
 3. **Settings → Devices & services → Add integration → Milky Way Planner**, then pick your AstroWeather sites and give each a
