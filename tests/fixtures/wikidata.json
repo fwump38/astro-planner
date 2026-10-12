@@ -1,0 +1,150 @@
+{
+ "_comment": "Real response from query.wikidata.org/sparql (trimmed): populated places in a bounding box around New Mexico.",
+ "head": {
+  "vars": [
+   "name",
+   "pop",
+   "coord"
+  ]
+ },
+ "results": {
+  "bindings": [
+   {
+    "name": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Albuquerque"
+    },
+    "pop": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
+     "type": "literal",
+     "value": "564559"
+    },
+    "coord": {
+     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+     "type": "literal",
+     "value": "Point(-106.650277777 35.084444444)"
+    }
+   },
+   {
+    "name": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Rio Rancho"
+    },
+    "pop": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
+     "type": "literal",
+     "value": "104046"
+    },
+    "coord": {
+     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+     "type": "literal",
+     "value": "Point(-106.66447 35.23338)"
+    }
+   },
+   {
+    "name": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Santa Fe"
+    },
+    "pop": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
+     "type": "literal",
+     "value": "87505"
+    },
+    "coord": {
+     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+     "type": "literal",
+     "value": "Point(-105.966666666 35.666666666)"
+    }
+   },
+   {
+    "name": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Farmington"
+    },
+    "pop": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
+     "type": "literal",
+     "value": "46624"
+    },
+    "coord": {
+     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+     "type": "literal",
+     "value": "Point(-108.205444444 36.729111111)"
+    }
+   },
+   {
+    "name": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Los Alamos"
+    },
+    "pop": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
+     "type": "literal",
+     "value": "13179"
+    },
+    "coord": {
+     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+     "type": "literal",
+     "value": "Point(-106.297777777 35.891111111)"
+    }
+   },
+   {
+    "name": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Española"
+    },
+    "pop": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
+     "type": "literal",
+     "value": "10526"
+    },
+    "coord": {
+     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+     "type": "literal",
+     "value": "Point(-106.064722222 36.001944444)"
+    }
+   },
+   {
+    "name": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Radium Springs"
+    },
+    "pop": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
+     "type": "literal",
+     "value": "1498"
+    },
+    "coord": {
+     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+     "type": "literal",
+     "value": "Point(-106.910555555 32.49)"
+    }
+   },
+   {
+    "name": {
+     "xml:lang": "en",
+     "type": "literal",
+     "value": "Santa Fe"
+    },
+    "pop": {
+     "datatype": "http://www.w3.org/2001/XMLSchema#decimal",
+     "type": "literal",
+     "value": "87505"
+    },
+    "coord": {
+     "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+     "type": "literal",
+     "value": "Point(-105.966666666 35.666666666)"
+    }
+   }
+  ]
+ }
+}

@@ -10,6 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.util import dt as dt_util
 
+from .cities import cache_path
 from .config import build_config
 from .coordinator import LiveCoordinator, PlannerCoordinator
 from .drive import DriveTimes
@@ -64,6 +65,11 @@ async def _lookup_drive_times(planner: PlannerCoordinator, drive: DriveTimes) ->
 
 async def _reload(hass: HomeAssistant, entry: ConfigEntry) -> None:
     await hass.config_entries.async_reload(entry.entry_id)
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: PlannerEntry) -> None:
+    """Delete the cached GeoNames dump along with the integration."""
+    await hass.async_add_executor_job(lambda: cache_path(hass).unlink(missing_ok=True))
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: PlannerEntry) -> bool:

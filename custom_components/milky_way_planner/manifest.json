@@ -11,5 +11,5 @@
   "issue_tracker": "https://github.com/fwump38/milky-way-planner/issues",
   "requirements": ["astronomy-engine==2.1.19"],
   "single_config_entry": true,
-  "version": "0.1.0"
+  "version": "0.2.0"
 }

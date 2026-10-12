@@ -17,6 +17,23 @@ It builds on [AstroWeather](https://github.com/mawinkler/astroweather) for the f
 
 With no sites, everything is computed for your Home Assistant location.
 
+## Light domes
+
+Cities near your sites affect the core differently depending on which way it is: a city behind the core at low altitude washes it
+out, a city on the opposite horizon barely matters. The planner models each city's glow by distance and population, compares its
+direction with where the core is at each moment, and lowers a night's score accordingly.
+
+**Options → Light domes → Find nearby cities** builds the list for you:
+
+1. It downloads the [GeoNames](https://www.geonames.org) `cities1000` dump (~11 MB, no account needed), once, and caches it for 30 days.
+   If GeoNames can't be reached it falls back to [Wikidata](https://www.wikidata.org).
+2. It keeps places that would actually add glow at your Home Assistant location or any site, within the search radius you choose.
+3. It folds nearby towns (within 20 km) into the larger city's metro area, so a city and its suburbs count as one dome.
+4. You review and edit the result before it's saved.
+
+The list is stored in the integration and is also what the card uses if you haven't given the card a list of its own.
+The lookups send your sites' coordinates only to Wikidata, and only if GeoNames fails (the GeoNames download is the same file for everyone).
+
 ## Calendars
 
 | Entity | Contains |
@@ -103,7 +120,7 @@ actions:
 
 If this integration is installed, the card automatically asks it for the astronomy (calendar nights, moon rise/set, core window)
 and falls back to its own identical calculations if it isn't there, so the card still works on its own. The integration exposes a
-small websocket API (`milky_way_planner/info`, `milky_way_planner/nights`) for this.
+small websocket API (`milky_way_planner/info`, `nights`, `light_domes` and, for admins, `find_light_domes`) for this.
 
 ## Privacy
 
@@ -119,5 +136,7 @@ uv venv --python 3.13 .venv && uv pip install --python .venv/bin/python -r requi
 ```
 
 `tests/fixtures/ts-nights.json` is generated from the card's TypeScript and pins the two implementations to each other.
+
+City data: [GeoNames](https://www.geonames.org), licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); fallback [Wikidata](https://www.wikidata.org) (CC0).
 
 MIT licensed.

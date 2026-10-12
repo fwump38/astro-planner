@@ -10,7 +10,8 @@ from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant
 
 from .astro import LightDome, NightSummary, Observer, SkyOptions, compute_night, dome_geometry
-from .const import API_VERSION
+from .cities import CityLookupError, async_find_domes
+from .const import API_VERSION, CONF_LIGHT_DOMES, CONF_LIGHT_DOMES_INFO, DOMAIN
 
 MAX_DAYS = 62
 
@@ -87,6 +88,8 @@ def _compute(params: dict[str, Any]) -> list[dict[str, Any]]:
 def async_register_websocket(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_info)
     websocket_api.async_register_command(hass, ws_nights)
+    websocket_api.async_register_command(hass, ws_light_domes)
+    websocket_api.async_register_command(hass, ws_find_light_domes)
 
 
 @websocket_api.websocket_command({vol.Required("type"): "milky_way_planner/info"})
@@ -131,3 +134,51 @@ _DOME = vol.Schema(
 async def ws_nights(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
     nights = await hass.async_add_executor_job(_compute, msg)
     connection.send_result(msg["id"], {"api_version": API_VERSION, "nights": nights})
+
+
+# -- light domes: stored lookup results and on-demand lookup, for the card ---------------------
+
+
+def _entry_options(hass: HomeAssistant) -> dict[str, Any] | None:
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        return dict(entry.options)
+    return None
+
+
+@websocket_api.websocket_command({vol.Required("type"): "milky_way_planner/light_domes"})
+@websocket_api.async_response
+async def ws_light_domes(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """The light domes stored in the integration (from its "Find nearby cities" lookup or edited by hand)."""
+    options = _entry_options(hass) or {}
+    connection.send_result(
+        msg["id"],
+        {"api_version": API_VERSION, "domes": options.get(CONF_LIGHT_DOMES, []), "info": options.get(CONF_LIGHT_DOMES_INFO)},
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "milky_way_planner/find_light_domes",
+        vol.Required("points"): vol.All([_OBSERVER], vol.Length(min=1, max=30)),
+        vol.Optional("radius_km", default=250): vol.All(vol.Coerce(float), vol.Range(min=10, max=600)),
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_find_light_domes(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """Look up cities around some points (GeoNames, then Wikidata) without storing anything."""
+    points = [Observer(p["latitude"], p["longitude"], p.get("elevation", 0.0)) for p in msg["points"]]
+    try:
+        result = await async_find_domes(hass, points, msg["radius_km"])
+    except CityLookupError as err:
+        connection.send_error(msg["id"], "lookup_failed", "; ".join(err.failures))
+        return
+    connection.send_result(
+        msg["id"],
+        {
+            "api_version": API_VERSION,
+            "source": result.source,
+            "places_considered": result.places_considered,
+            "domes": [{"name": d.name, "latitude": d.latitude, "longitude": d.longitude, "population": d.population} for d in result.domes],
+        },
+    )

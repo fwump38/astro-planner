@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+from datetime import UTC, datetime
 from typing import Any
 
 import voluptuous as vol
@@ -9,6 +11,8 @@ from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResu
 from homeassistant.core import callback
 from homeassistant.helpers import selector
 
+from .cities import CityLookupError, LookupResult, async_find_domes, lookup_points
+from .config import build_config
 from .const import (
     CONF_AUTO_DRIVE,
     CONF_BORTLE,
@@ -21,6 +25,7 @@ from .const import (
     CONF_GOOD_SCORE,
     CONF_LATITUDE,
     CONF_LIGHT_DOMES,
+    CONF_LIGHT_DOMES_INFO,
     CONF_LONGITUDE,
     CONF_MAX_MOON,
     CONF_MIN_GC_ALTITUDE,
@@ -156,19 +161,89 @@ class MilkyWayPlannerOptionsFlow(SitesFlowMixin, OptionsFlow):
         schema = vol.Schema({vol.Required(k, default=current[k]): _num(0, 10, 0.5) for k in DEFAULT_WEIGHTS})
         return self.async_show_form(step_id="scoring", data_schema=schema)
 
+    # -- light domes -------------------------------------------------------------------------
+
+    _lookup_task: asyncio.Task[LookupResult] | None = None
+    _lookup_radius: float = 250
+    _found: LookupResult | None = None
+
     async def async_step_domes(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        return self.async_show_menu(step_id="domes", menu_options=["find_domes", "edit_domes"])
+
+    async def async_step_find_domes(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Look up nearby cities (GeoNames, then Wikidata) around Home Assistant and every located site."""
+        if self._lookup_task is None:
+            if user_input is None:
+                schema = vol.Schema({vol.Required("radius_km", default=250): _num(25, 600, 25, "km")})
+                return self.async_show_form(step_id="find_domes", data_schema=schema)
+            self._lookup_radius = float(user_input["radius_km"])
+            cfg = build_config(self.hass, dict(self.config_entry.options))
+            points = lookup_points(cfg.home, [s.observer for s in cfg.sites if s.observer])
+            self._lookup_task = self.hass.async_create_task(async_find_domes(self.hass, points, self._lookup_radius))
+        if not self._lookup_task.done():
+            return self.async_show_progress(step_id="find_domes", progress_action="lookup", progress_task=self._lookup_task)
+        task, self._lookup_task = self._lookup_task, None
+        try:
+            self._found = task.result()
+        except CityLookupError as err:
+            self._lookup_error = "; ".join(err.failures)
+            return self.async_show_progress_done(next_step_id="find_failed")
+        return self.async_show_progress_done(next_step_id="review_domes")
+
+    _lookup_error: str = ""
+
+    async def async_step_find_failed(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        return self.async_abort(reason="lookup_failed", description_placeholders={"errors": self._lookup_error})
+
+    async def async_step_review_domes(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        found = self._found
+        assert found is not None
+        existing = list(self.config_entry.options.get(CONF_LIGHT_DOMES, []))
+        if user_input is not None:
+            domes = self._clean_domes(user_input.get(CONF_LIGHT_DOMES) or [])
+            if domes is None:
+                return self._review_form(existing, found, {"base": "invalid_domes"})
+            info = {"source": found.source, "updated": datetime.now(UTC).isoformat(timespec="seconds"), "radius_km": self._lookup_radius, "count": len(domes)}
+            return self._save(**{CONF_LIGHT_DOMES: domes, CONF_LIGHT_DOMES_INFO: info})
+        return self._review_form(existing, found, {})
+
+    def _review_form(self, existing: list[dict[str, Any]], found: LookupResult, errors: dict[str, str]) -> ConfigFlowResult:
+        # Keep the user's existing entries (manual edits win on a name clash) and add what was found.
+        names = {str(d["name"]).lower() for d in existing}
+        merged = existing + [
+            {"name": d.name, "latitude": d.latitude, "longitude": d.longitude, "population": d.population}
+            for d in found.domes
+            if d.name.lower() not in names
+        ]
+        schema = vol.Schema({vol.Optional(CONF_LIGHT_DOMES, default=merged): selector.ObjectSelector()})
+        return self.async_show_form(
+            step_id="review_domes",
+            data_schema=schema,
+            errors=errors,
+            description_placeholders={"source": found.source, "found": str(len(found.domes)), "considered": str(found.places_considered), "radius": f"{self._lookup_radius:g}"},
+        )
+
+    @staticmethod
+    def _clean_domes(domes: list[dict[str, Any]]) -> list[dict[str, Any]] | None:
+        try:
+            return [
+                {"name": str(d["name"]), "latitude": float(d["latitude"]), "longitude": float(d["longitude"]), "population": float(d.get("population", 0))}
+                for d in domes
+            ]
+        except (KeyError, TypeError, ValueError):
+            return None
+
+    async def async_step_edit_domes(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
-            domes = user_input.get(CONF_LIGHT_DOMES) or []
-            try:
-                cleaned = [
-                    {"name": str(d["name"]), "latitude": float(d["latitude"]), "longitude": float(d["longitude"]), "population": float(d.get("population", 0))}
-                    for d in domes
-                ]
-            except (KeyError, TypeError, ValueError):
+            cleaned = self._clean_domes(user_input.get(CONF_LIGHT_DOMES) or [])
+            if cleaned is None:
                 errors["base"] = "invalid_domes"
             else:
-                return self._save(**{CONF_LIGHT_DOMES: cleaned, CONF_DOME_SIGMA: user_input[CONF_DOME_SIGMA], CONF_DOME_WARNING: user_input[CONF_DOME_WARNING]})
+                changes: dict[str, Any] = {CONF_LIGHT_DOMES: cleaned, CONF_DOME_SIGMA: user_input[CONF_DOME_SIGMA], CONF_DOME_WARNING: user_input[CONF_DOME_WARNING]}
+                if cleaned != self.config_entry.options.get(CONF_LIGHT_DOMES, []):
+                    changes[CONF_LIGHT_DOMES_INFO] = {**self.config_entry.options.get(CONF_LIGHT_DOMES_INFO, {}), "source": "manual", "count": len(cleaned)}
+                return self._save(**changes)
         schema = vol.Schema(
             {
                 vol.Optional(CONF_LIGHT_DOMES, default=self.config_entry.options.get(CONF_LIGHT_DOMES, [])): selector.ObjectSelector(),
@@ -176,4 +251,4 @@ class MilkyWayPlannerOptionsFlow(SitesFlowMixin, OptionsFlow):
                 vol.Required(CONF_DOME_WARNING, default=self._opt(CONF_DOME_WARNING)): _num(0.01, 1, 0.01),
             }
         )
-        return self.async_show_form(step_id="domes", data_schema=schema, errors=errors)
+        return self.async_show_form(step_id="edit_domes", data_schema=schema, errors=errors)

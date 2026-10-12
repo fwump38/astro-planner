@@ -4,7 +4,9 @@
       "user": {
         "title": "Milky Way Planner",
         "description": "Pick your AstroWeather sites. You can leave this empty and add them later; the calendars and sensors then use your Home Assistant location.",
-        "data": { "sites": "AstroWeather sites" }
+        "data": {
+          "sites": "AstroWeather sites"
+        }
       },
       "site": {
         "title": "Site: {site}",
@@ -18,7 +20,9 @@
         }
       }
     },
-    "abort": { "single_instance_allowed": "Milky Way Planner is already set up." }
+    "abort": {
+      "single_instance_allowed": "Milky Way Planner is already set up."
+    }
   },
   "options": {
     "step": {
@@ -31,7 +35,12 @@
           "domes": "Light domes"
         }
       },
-      "sites": { "title": "Sites", "data": { "sites": "AstroWeather sites" } },
+      "sites": {
+        "title": "Sites",
+        "data": {
+          "sites": "AstroWeather sites"
+        }
+      },
       "site": {
         "title": "Site: {site}",
         "data": {
@@ -56,11 +65,37 @@
       },
       "scoring": {
         "title": "Weather score weights",
-        "data": { "cloud": "Cloud", "transparency": "Transparency", "seeing": "Seeing", "calm": "Calm (wind)" }
+        "data": {
+          "cloud": "Cloud",
+          "transparency": "Transparency",
+          "seeing": "Seeing",
+          "calm": "Calm (wind)"
+        }
       },
       "domes": {
         "title": "Light domes",
-        "description": "A list of cities whose glow can affect the core, each with name, latitude, longitude and population.",
+        "menu_options": {
+          "find_domes": "Find nearby cities",
+          "edit_domes": "Edit the list and glow settings"
+        }
+      },
+      "find_domes": {
+        "title": "Find nearby cities",
+        "description": "Looks up populated places around your Home Assistant location and your sites using GeoNames (CC BY 4.0), falling back to Wikidata. Nearby towns are combined into metro areas. This downloads a ~11 MB file once and caches it for 30 days.",
+        "data": {
+          "radius_km": "Search radius"
+        }
+      },
+      "review_domes": {
+        "title": "Review light domes",
+        "description": "Found {found} cities within {radius} km via {source} ({considered} places considered). Your existing entries are kept. Edit or remove anything, then save.",
+        "data": {
+          "light_domes": "Light domes"
+        }
+      },
+      "edit_domes": {
+        "title": "Light domes",
+        "description": "Cities whose glow can affect the core, each with name, latitude, longitude and population.",
         "data": {
           "light_domes": "Light domes",
           "dome_sigma": "Angular spread of a city's glow",
@@ -68,43 +103,100 @@
         }
       }
     },
-    "error": { "invalid_domes": "Each light dome needs a name, latitude and longitude." }
+    "error": {
+      "invalid_domes": "Each light dome needs a name, latitude and longitude."
+    },
+    "progress": {
+      "lookup": "Looking up nearby cities. The first lookup downloads the GeoNames file, which can take a minute."
+    },
+    "abort": {
+      "lookup_failed": "Couldn't reach any city data service: {errors}. Try again later, or add cities by hand under 'Edit the list'."
+    }
   },
   "entity": {
     "sensor": {
       "milky_way": {
-        "state": { "visible": "Visible", "twilight": "Twilight", "moonlit": "Moonlit", "below_horizon": "Below horizon" }
+        "state": {
+          "visible": "Visible",
+          "twilight": "Twilight",
+          "moonlit": "Moonlit",
+          "below_horizon": "Below horizon"
+        }
       },
-      "next_window_start": { "name": "Next window start" },
-      "next_window_end": { "name": "Next window end" },
-      "window_length": { "name": "Next window length" },
-      "next_good_night": { "name": "Next good night" },
+      "next_window_start": {
+        "name": "Next window start"
+      },
+      "next_window_end": {
+        "name": "Next window end"
+      },
+      "window_length": {
+        "name": "Next window length"
+      },
+      "next_good_night": {
+        "name": "Next good night"
+      },
       "tonight": {
         "name": "Tonight",
-        "state": { "best": "Best (pink)", "short": "Short window (blue)", "none": "No core" }
+        "state": {
+          "best": "Best (pink)",
+          "short": "Short window (blue)",
+          "none": "No core"
+        }
       },
-      "best_site": { "name": "Best site tonight" },
-      "site_score": { "name": "Milky Way score" },
-      "gc_elevation": { "name": "Elevation" },
-      "gc_azimuth": { "name": "Azimuth" },
+      "best_site": {
+        "name": "Best site tonight"
+      },
+      "site_score": {
+        "name": "Milky Way score"
+      },
+      "gc_elevation": {
+        "name": "Elevation"
+      },
+      "gc_azimuth": {
+        "name": "Azimuth"
+      },
       "gc_orientation": {
         "name": "Orientation",
-        "state": { "arch": "Arch", "angled": "Angled", "upright": "Upright" }
+        "state": {
+          "arch": "Arch",
+          "angled": "Angled",
+          "upright": "Upright"
+        }
       },
-      "gc_next_rising": { "name": "Next rising" },
-      "gc_next_setting": { "name": "Next setting" },
-      "moon_next_rising": { "name": "Next rising" },
-      "moon_next_setting": { "name": "Next setting" },
-      "moon_elevation": { "name": "Elevation" },
-      "moon_illumination": { "name": "Illumination" }
+      "gc_next_rising": {
+        "name": "Next rising"
+      },
+      "gc_next_setting": {
+        "name": "Next setting"
+      },
+      "moon_next_rising": {
+        "name": "Next rising"
+      },
+      "moon_next_setting": {
+        "name": "Next setting"
+      },
+      "moon_elevation": {
+        "name": "Elevation"
+      },
+      "moon_illumination": {
+        "name": "Illumination"
+      }
     },
     "binary_sensor": {
-      "visible": { "name": "Visible" },
-      "above_horizon": { "name": "Above horizon" }
+      "visible": {
+        "name": "Visible"
+      },
+      "above_horizon": {
+        "name": "Above horizon"
+      }
     },
     "calendar": {
-      "best_nights": { "name": "Best nights" },
-      "short_nights": { "name": "Short-window nights" }
+      "best_nights": {
+        "name": "Best nights"
+      },
+      "short_nights": {
+        "name": "Short-window nights"
+      }
     },
     "event": {
       "events": {
@@ -123,22 +215,57 @@
     }
   },
   "selector": {
-    "min_grade": { "options": { "best": "Full-length windows only (pink)", "short": "Include short windows (blue)" } },
-    "sort": { "options": { "score": "Best score first", "date": "Soonest first", "window": "Longest window first" } }
+    "min_grade": {
+      "options": {
+        "best": "Full-length windows only (pink)",
+        "short": "Include short windows (blue)"
+      }
+    },
+    "sort": {
+      "options": {
+        "score": "Best score first",
+        "date": "Soonest first",
+        "window": "Longest window first"
+      }
+    }
   },
   "services": {
     "best_night": {
       "name": "Best night",
       "description": "Finds the best upcoming nights for the Milky Way core, ranking your sites using the weather forecast. Returns the result as response data.",
       "fields": {
-        "days": { "name": "Days to search", "description": "How many nights ahead to consider, starting tonight." },
-        "count": { "name": "Number of nights", "description": "How many nights to return." },
-        "min_grade": { "name": "Minimum grade", "description": "Pink nights only, or include blue (short-window) nights." },
-        "min_score": { "name": "Minimum score", "description": "Skip nights whose best site scores below this (0-100)." },
-        "sort": { "name": "Sort by", "description": "Order the results by score, date or window length." },
-        "site": { "name": "Site", "description": "Only consider this AstroWeather site." },
-        "start": { "name": "Start date", "description": "First night to consider. Defaults to tonight." },
-        "include_sites": { "name": "Include every site", "description": "Add the full site ranking for each night." }
+        "days": {
+          "name": "Days to search",
+          "description": "How many nights ahead to consider, starting tonight."
+        },
+        "count": {
+          "name": "Number of nights",
+          "description": "How many nights to return."
+        },
+        "min_grade": {
+          "name": "Minimum grade",
+          "description": "Pink nights only, or include blue (short-window) nights."
+        },
+        "min_score": {
+          "name": "Minimum score",
+          "description": "Skip nights whose best site scores below this (0-100)."
+        },
+        "sort": {
+          "name": "Sort by",
+          "description": "Order the results by score, date or window length."
+        },
+        "site": {
+          "name": "Site",
+          "description": "Only consider this AstroWeather site."
+        },
+        "start": {
+          "name": "Start date",
+          "description": "First night to consider. Defaults to tonight."
+        },
+        "include_sites": {
+          "name": "Include every site",
+          "description": "Add the full site ranking for each night."
+        }
       }
     }
   }
