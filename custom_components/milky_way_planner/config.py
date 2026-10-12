@@ -43,6 +43,10 @@ class Site:
     drive_minutes: int | None
     drive_estimated: bool
     observer: Observer | None
+    # Where each input came from, so sensors can say whether a value was read from AstroWeather, configured, or assumed.
+    coordinates_source: str | None = None  # configured | astroweather
+    bortle_source: str = "default"  # configured | default
+    drive_source: str | None = None  # configured | route | estimate
 
     @property
     def key(self) -> str:
@@ -135,7 +139,11 @@ def site_display_name(hass: HomeAssistant, entity_id: str, name: str | None) -> 
 
 
 def build_config(
-    hass: HomeAssistant, options: dict[str, Any], drive_lookup: Callable[[Observer, Observer], int | None] | None = None
+    hass: HomeAssistant,
+    options: dict[str, Any],
+    drive_lookup: Callable[[Observer, Observer], int | None] | None = None,
+    drive_lookup_source: Callable[[Observer, Observer], str | None] | None = None,
+    bortle_lookup: Callable[[Observer], int | None] | None = None,
 ) -> PlannerConfig:
     o = {**DEFAULTS, **options}
     home = Observer(hass.config.latitude, hass.config.longitude, float(hass.config.elevation or 0))
@@ -145,15 +153,31 @@ def build_config(
         entity = raw[CONF_ENTITY]
         if raw.get(CONF_LATITUDE) is not None and raw.get(CONF_LONGITUDE) is not None:
             observer: Observer | None = Observer(raw[CONF_LATITUDE], raw[CONF_LONGITUDE])
+            coords_source: str | None = "configured"
         else:
             observer = _sibling_observer(hass, entity)
+            coords_source = "astroweather" if observer else None
         drive = raw.get(CONF_DRIVE_MINUTES)
         estimated = False
+        drive_source = None
         if drive:
             manual[entity] = int(drive)
+            drive_source = "configured"
         elif o[CONF_AUTO_DRIVE] and drive_lookup and observer and (cached := drive_lookup(home, observer)):
             drive, estimated = cached, True
-        sites.append(Site(entity, site_display_name(hass, entity, raw.get(CONF_NAME)), float(raw.get(CONF_BORTLE, DEFAULT_BORTLE)), drive or None, estimated, observer))
+            drive_source = drive_lookup_source(home, observer) if drive_lookup_source else "estimate"
+        if raw.get(CONF_BORTLE) is not None:
+            bortle, bortle_source = float(raw[CONF_BORTLE]), "configured"
+        elif bortle_lookup and observer and (est := bortle_lookup(observer)):
+            bortle, bortle_source = float(est), "estimated"
+        else:
+            bortle, bortle_source = float(DEFAULT_BORTLE), "default"
+        sites.append(
+            Site(
+                entity, site_display_name(hass, entity, raw.get(CONF_NAME)), bortle, drive or None, estimated, observer,
+                coords_source, bortle_source, drive_source,
+            )
+        )
     return PlannerConfig(
         home=home,
         sites=sites,

@@ -7,10 +7,12 @@ from typing import Any
 
 import voluptuous as vol
 from homeassistant.components import websocket_api
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 
-from .astro import LightDome, NightSummary, Observer, SkyOptions, compute_night, dome_geometry
+from .astro import NightSummary, Observer, compute_night, sample_sky
 from .cities import CityLookupError, async_find_domes
+from .config import Site
 from .const import API_VERSION, CONF_LIGHT_DOMES, CONF_LIGHT_DOMES_INFO, DOMAIN
 
 MAX_DAYS = 62
@@ -73,21 +75,11 @@ def serialize_night(n: NightSummary, include_samples: bool) -> dict[str, Any]:
     return out
 
 
-def _compute(params: dict[str, Any]) -> list[dict[str, Any]]:
-    obs_p = params["observer"]
-    observer = Observer(obs_p["latitude"], obs_p["longitude"], obs_p.get("elevation", 0.0))
-    domes = [LightDome(d["name"], d["latitude"], d["longitude"], d.get("population", 0)) for d in params.get("domes", [])]
-    opts = SkyOptions(params["min_gc_altitude"], params["max_moon_illumination"], params["bortle"], dome_geometry(observer, domes), params["dome_sigma"])
-    start: date = params["start"]
-    return [
-        serialize_night(compute_night(start + timedelta(days=i), observer, opts, params["step_minutes"]), params["include_samples"])
-        for i in range(params["days"])
-    ]
-
-
 def async_register_websocket(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_info)
-    websocket_api.async_register_command(hass, ws_nights)
+    websocket_api.async_register_command(hass, ws_overview)
+    websocket_api.async_register_command(hass, ws_calendar)
+    websocket_api.async_register_command(hass, ws_sky_hours)
     websocket_api.async_register_command(hass, ws_light_domes)
     websocket_api.async_register_command(hass, ws_find_light_domes)
 
@@ -105,35 +97,149 @@ _OBSERVER = vol.Schema(
         vol.Optional("elevation", default=0.0): vol.Coerce(float),
     }
 )
-_DOME = vol.Schema(
-    {
-        vol.Required("name"): str,
-        vol.Required("latitude"): vol.Coerce(float),
-        vol.Required("longitude"): vol.Coerce(float),
-        vol.Optional("population", default=0): vol.Coerce(float),
+
+
+def _runtime(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]):
+    """The loaded config entry's runtime data, or None after replying with an error."""
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        if entry.state is ConfigEntryState.LOADED:
+            return entry.runtime_data
+    connection.send_error(msg["id"], "not_loaded", "Milky Way Planner isn't set up")
+    return None
+
+
+def _site_json(site: Site) -> dict[str, Any]:
+    o = site.observer
+    return {
+        "entity": site.entity,
+        "name": site.name,
+        "bortle": site.bortle,
+        "drive_minutes": site.drive_minutes,
+        "drive_estimated": site.drive_estimated,
+        "latitude": o.latitude if o else None,
+        "longitude": o.longitude if o else None,
+        "elevation": o.elevation if o else None,
+        "source": {"coordinates": site.coordinates_source, "bortle": site.bortle_source, "drive_time": site.drive_source},
     }
-)
+
+
+def _observer_json(o: Observer) -> dict[str, float]:
+    return {"latitude": o.latitude, "longitude": o.longitude, "elevation": o.elevation}
+
+
+@websocket_api.websocket_command({vol.Required("type"): "milky_way_planner/overview"})
+@websocket_api.async_response
+async def ws_overview(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """Everything the card's Tonight and calendar-badge views show: the sites, their settings and each site's scored nights."""
+    rt = _runtime(hass, connection, msg)
+    if rt is None:
+        return
+    cfg = rt.engine.config
+    data = rt.planner.data
+    scores: dict[str, list[dict[str, Any]]] = {}
+    for site in cfg.sites:
+        rows = []
+        for d in data.dates:
+            sc = data.scores.get(site.entity, {}).get(d)
+            if sc is None:
+                continue
+            rows.append(
+                {
+                    "date": d.isoformat(),
+                    "score": sc.score,
+                    "astro_only": sc.astro_only,
+                    "weather": sc.weather,
+                    "cloud": sc.cloud,
+                    "dome_warning": sc.dome_warning,
+                    "night": serialize_night(sc.night, False),
+                }
+            )
+        scores[site.entity] = rows
+    connection.send_result(
+        msg["id"],
+        {
+            "api_version": API_VERSION,
+            "tonight": data.tonight.isoformat(),
+            "reference": _observer_json(cfg.reference),
+            "settings": {
+                "nights": cfg.nights,
+                "min_gc_altitude": cfg.min_gc_altitude,
+                "max_moon_illumination": cfg.max_moon_illumination,
+                "calendar_min_altitude": cfg.calendar_min_altitude,
+                "calendar_best_minutes": cfg.calendar_best_minutes,
+                "dome_warning_threshold": cfg.dome_warning_threshold,
+            },
+            "sites": [_site_json(s) for s in cfg.sites],
+            "scores": scores,
+            "forecast_end": {e: end.isoformat() for e, end in data.forecast_end.items() if end},
+        },
+    )
+
+
+def _calendar(rt, start: date, days: int) -> list[dict[str, Any]]:
+    cfg = rt.engine.config
+    ref = cfg.reference
+    opts = cfg.calendar_options()
+    return [serialize_night(compute_night(start + timedelta(days=i), ref, opts, 10), True) for i in range(days)]
 
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): "milky_way_planner/nights",
+        vol.Required("type"): "milky_way_planner/calendar",
         vol.Required("start"): vol.Coerce(date.fromisoformat),
         vol.Required("days"): vol.All(vol.Coerce(int), vol.Range(min=1, max=MAX_DAYS)),
-        vol.Required("observer"): _OBSERVER,
-        vol.Optional("bortle", default=3): vol.Coerce(float),
-        vol.Optional("min_gc_altitude", default=10): vol.Coerce(float),
-        vol.Optional("max_moon_illumination", default=10): vol.Coerce(float),
-        vol.Optional("dome_sigma", default=25): vol.Coerce(float),
-        vol.Optional("domes", default=[]): [_DOME],
-        vol.Optional("step_minutes", default=10): vol.All(vol.Coerce(int), vol.Range(min=2, max=30)),
-        vol.Optional("include_samples", default=True): bool,
     }
 )
 @websocket_api.async_response
-async def ws_nights(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
-    nights = await hass.async_add_executor_job(_compute, msg)
+async def ws_calendar(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """Nights at the centre of the sites (the calendar's astronomy), with the samples behind the timeline bars."""
+    rt = _runtime(hass, connection, msg)
+    if rt is None:
+        return
+    nights = await hass.async_add_executor_job(_calendar, rt, msg["start"], msg["days"])
     connection.send_result(msg["id"], {"api_version": API_VERSION, "nights": nights})
+
+
+def _sky_hours(rt, site: Site, start: datetime, hours: int) -> list[dict[str, Any]]:
+    opts = rt.engine.config.site_options(site)
+    obs = site.observer.ae()
+    out = []
+    for i in range(hours):
+        s = sample_sky(start + timedelta(hours=i), site.observer, opts, obs)
+        out.append(
+            {
+                "t": int(s.time.timestamp() * 1000),
+                "sun": round(s.sun_altitude, 3),
+                "moon": round(s.moon_altitude, 3),
+                "lm": round(s.limiting_magnitude, 3),
+                "alt": round(s.gc.altitude, 3),
+                "vis": s.gc_visible,
+                "dp": round(s.dome_penalty, 5),
+            }
+        )
+    return out
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "milky_way_planner/sky_hours",
+        vol.Required("entity"): str,
+        vol.Required("start"): vol.Coerce(datetime.fromisoformat),
+        vol.Required("hours"): vol.All(vol.Coerce(int), vol.Range(min=1, max=96)),
+    }
+)
+@websocket_api.async_response
+async def ws_sky_hours(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """Hourly sky conditions at a site (sun, moon, limiting magnitude, core altitude, dome interference) for the sky chart."""
+    rt = _runtime(hass, connection, msg)
+    if rt is None:
+        return
+    site = next((s for s in rt.engine.config.sites if s.entity == msg["entity"] and s.observer), None)
+    if site is None:
+        connection.send_error(msg["id"], "unknown_site", f"{msg['entity']} isn't a located site")
+        return
+    hours = await hass.async_add_executor_job(_sky_hours, rt, site, msg["start"], msg["hours"])
+    connection.send_result(msg["id"], {"api_version": API_VERSION, "hours": hours})
 
 
 # -- light domes: stored lookup results and on-demand lookup, for the card ---------------------

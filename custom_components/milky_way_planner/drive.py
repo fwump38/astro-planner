@@ -48,6 +48,10 @@ class DriveTimes:
         entry = self._cache.get(_pair_key(a, b))
         return entry["minutes"] if entry else None
 
+    def cached_source(self, a: Observer, b: Observer) -> str | None:
+        entry = self._cache.get(_pair_key(a, b))
+        return entry["source"] if entry else None
+
     async def async_get(self, a: Observer, b: Observer) -> int:
         key = _pair_key(a, b)
         async with self._lock:

@@ -50,6 +50,9 @@ async def test_entities_exist(hass, setup):
         assert hass.states.get(eid) is not None, eid
     assert hass.states.get("sensor.milky_way").state in ("visible", "twilight", "moonlit", "below_horizon")
     assert hass.states.get("sensor.kanab_milky_way_score").attributes["drive_minutes"] == 120
+    src = hass.states.get("sensor.kanab_milky_way_score").attributes["source"]
+    assert src["bortle"] == "configured" and src["drive_time"] == "configured" and src["sky"] == "computed"
+    assert hass.states.get("sensor.milky_way").attributes["source"] == "computed"
 
 
 async def test_calendars_list_pink_and_blue(hass, setup):
@@ -78,18 +81,29 @@ async def test_best_night_service(hass, setup):
     assert scores == sorted(scores, reverse=True)
 
 
-async def test_websocket_nights(hass, hass_ws_client, setup):
+async def test_websocket_overview_calendar_and_sky_hours(hass, hass_ws_client, setup):
     client = await hass_ws_client(hass)
     await client.send_json_auto_id({"type": "milky_way_planner/info"})
-    assert (await client.receive_json())["result"]["api_version"] == 1
-    await client.send_json_auto_id(
-        {"type": "milky_way_planner/nights", "start": "2026-10-10", "days": 2, "observer": {"latitude": 37.047, "longitude": -112.527, "elevation": 1500},
-         "bortle": 2, "min_gc_altitude": 0, "max_moon_illumination": 100}
-    )
+    assert (await client.receive_json())["result"]["api_version"] == 2
+
+    await client.send_json_auto_id({"type": "milky_way_planner/overview"})
     res = (await client.receive_json())["result"]
-    assert len(res["nights"]) == 2
-    n = res["nights"][0]
-    assert n["orientation"] == "upright" and n["samples"] and n["gc_minutes"] > 0
+    site = res["sites"][0]
+    assert site["entity"] == SITE and site["bortle"] == 2 and site["source"]["bortle"] == "configured"
+    assert res["settings"]["nights"] >= 1 and len(res["scores"][SITE]) == res["settings"]["nights"]
+    row = res["scores"][SITE][0]
+    assert {"date", "score", "astro_only", "cloud", "dome_warning", "night"} <= row.keys()
+
+    await client.send_json_auto_id({"type": "milky_way_planner/calendar", "start": "2026-10-10", "days": 2})
+    nights = (await client.receive_json())["result"]["nights"]
+    assert len(nights) == 2 and nights[0]["samples"] and nights[0]["gc_minutes"] > 0
+
+    await client.send_json_auto_id({"type": "milky_way_planner/sky_hours", "entity": SITE, "start": "2026-10-10T00:00:00+00:00", "hours": 5})
+    hours = (await client.receive_json())["result"]["hours"]
+    assert len(hours) == 5 and {"sun", "moon", "lm", "alt", "vis", "dp"} <= hours[0].keys()
+
+    await client.send_json_auto_id({"type": "milky_way_planner/sky_hours", "entity": "weather.nope", "start": "2026-10-10T00:00:00+00:00", "hours": 1})
+    assert (await client.receive_json())["error"]["code"] == "unknown_site"
 
 
 async def test_window_sensors_consistent(hass, setup):

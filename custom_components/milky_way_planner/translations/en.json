@@ -3,18 +3,19 @@
     "step": {
       "user": {
         "title": "Milky Way Planner",
-        "description": "Pick your AstroWeather sites. You can leave this empty and add them later; the calendars and sensors then use your Home Assistant location.",
+        "description": "Every AstroWeather site is selected; untick any you don't want. Coordinates are read from AstroWeather, and each site's Bortle class is estimated from nearby towns (AstroWeather doesn't provide it).",
         "data": {
-          "sites": "AstroWeather sites"
+          "sites": "AstroWeather sites",
+          "review_sites": "Review each site's details (name, Bortle class, drive time, coordinates)"
         }
       },
       "site": {
         "title": "Site: {site}",
-        "description": "Bortle class is the darkness of the sky at this site (1 = darkest). Coordinates are read from AstroWeather; only fill them in to override.",
+        "description": "Coordinates are read from AstroWeather and the Bortle class is estimated from nearby towns; fill in a field only to override it. Bortle 1 is the darkest sky.",
         "data": {
           "name": "Name (optional)",
-          "bortle": "Bortle class",
-          "drive_minutes": "Drive time in minutes (optional, looked up automatically if empty)",
+          "bortle": "Bortle class override (1-9, optional)",
+          "drive_minutes": "Drive time in minutes (optional; if empty it is looked up after setup)",
           "latitude": "Latitude override",
           "longitude": "Longitude override"
         }
@@ -38,15 +39,16 @@
       "sites": {
         "title": "Sites",
         "data": {
-          "sites": "AstroWeather sites"
+          "sites": "AstroWeather sites",
+          "review_sites": "Review each site's details (name, Bortle class, drive time, coordinates)"
         }
       },
       "site": {
         "title": "Site: {site}",
         "data": {
           "name": "Name (optional)",
-          "bortle": "Bortle class",
-          "drive_minutes": "Drive time in minutes (optional, looked up automatically if empty)",
+          "bortle": "Bortle class override (1-9, optional)",
+          "drive_minutes": "Drive time in minutes (optional; if empty it is looked up after setup)",
           "latitude": "Latitude override",
           "longitude": "Longitude override"
         }

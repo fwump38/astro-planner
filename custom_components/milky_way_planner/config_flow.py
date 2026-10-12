@@ -8,7 +8,8 @@ from typing import Any
 
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
-from homeassistant.core import callback
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import selector
 
 from .cities import CityLookupError, LookupResult, async_find_domes, lookup_points
@@ -33,7 +34,6 @@ from .const import (
     CONF_NIGHTS,
     CONF_SITES,
     CONF_WEIGHTS,
-    DEFAULT_BORTLE,
     DEFAULTS,
     DOMAIN,
 )
@@ -48,6 +48,13 @@ def _num(lo: float, hi: float, step: float | str = 1, unit: str | None = None) -
 
 
 SITE_PICKER = selector.EntitySelector(selector.EntitySelectorConfig(domain="weather", integration="astroweather", multiple=True))
+CONF_REVIEW = "review_sites"
+
+
+def discover_sites(hass: HomeAssistant) -> list[str]:
+    """Every AstroWeather weather entity, so setup can pre-select them all."""
+    reg = er.async_get(hass)
+    return sorted(e.entity_id for e in reg.entities.values() if e.platform == "astroweather" and e.domain == "weather" and not e.disabled)
 
 
 class SitesFlowMixin:
@@ -64,7 +71,7 @@ class SitesFlowMixin:
         return vol.Schema(
             {
                 opt(CONF_NAME): selector.TextSelector(),
-                vol.Required(CONF_BORTLE, default=existing.get(CONF_BORTLE, DEFAULT_BORTLE)): _num(1, 9, 1),
+                opt(CONF_BORTLE): _num(1, 9, 1),
                 opt(CONF_DRIVE_MINUTES): _num(0, 1440, 5, "min"),
                 opt(CONF_LATITUDE): _num(-90, 90, "any"),
                 opt(CONF_LONGITUDE): _num(-180, 180, "any"),
@@ -86,10 +93,23 @@ class SitesFlowMixin:
             self._sites.append({CONF_ENTITY: entity, **{k: v for k, v in user_input.items() if v not in (None, "")}})
         return await self._next_site()
 
-    def _start_sites(self, entities: list[str], existing: list[dict[str, Any]]) -> None:
-        self._sites = []
-        self._pending = list(entities)
+    def _start_sites(self, entities: list[str], existing: list[dict[str, Any]], review: bool = True) -> None:
         self._existing = {s[CONF_ENTITY]: s for s in existing}
+        if review:
+            self._sites = []
+            self._pending = list(entities)
+        else:
+            # Skip the per-site forms: keep what was already entered and leave the rest to AstroWeather and the defaults.
+            self._sites = [self._existing.get(e, {CONF_ENTITY: e}) for e in entities]
+            self._pending = []
+
+    def _sites_schema(self, selected: list[str]) -> vol.Schema:
+        return vol.Schema(
+            {
+                vol.Optional(CONF_SITES, default=selected): SITE_PICKER,
+                vol.Optional(CONF_REVIEW, default=False): selector.BooleanSelector(),
+            }
+        )
 
 
 class MilkyWayPlannerConfigFlow(SitesFlowMixin, ConfigFlow, domain=DOMAIN):
@@ -104,9 +124,9 @@ class MilkyWayPlannerConfigFlow(SitesFlowMixin, ConfigFlow, domain=DOMAIN):
         await self.async_set_unique_id(DOMAIN)
         self._abort_if_unique_id_configured()
         if user_input is not None:
-            self._start_sites(user_input.get(CONF_SITES, []), [])
+            self._start_sites(user_input.get(CONF_SITES, []), [], user_input.get(CONF_REVIEW, False))
             return await self._next_site()
-        return self.async_show_form(step_id="user", data_schema=vol.Schema({vol.Optional(CONF_SITES, default=[]): SITE_PICKER}))
+        return self.async_show_form(step_id="user", data_schema=self._sites_schema(discover_sites(self.hass)))
 
     async def _sites_done(self) -> ConfigFlowResult:
         return self.async_create_entry(title="Milky Way Planner", data={}, options={CONF_SITES: self._sites})
@@ -127,10 +147,9 @@ class MilkyWayPlannerOptionsFlow(SitesFlowMixin, OptionsFlow):
     async def async_step_sites(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         current = self.config_entry.options.get(CONF_SITES, [])
         if user_input is not None:
-            self._start_sites(user_input.get(CONF_SITES, []), current)
+            self._start_sites(user_input.get(CONF_SITES, []), current, user_input.get(CONF_REVIEW, False))
             return await self._next_site()
-        schema = vol.Schema({vol.Optional(CONF_SITES, default=[s[CONF_ENTITY] for s in current]): SITE_PICKER})
-        return self.async_show_form(step_id="sites", data_schema=schema)
+        return self.async_show_form(step_id="sites", data_schema=self._sites_schema([s[CONF_ENTITY] for s in current]))
 
     async def _sites_done(self) -> ConfigFlowResult:
         return self._save(**{CONF_SITES: self._sites})

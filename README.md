@@ -14,8 +14,14 @@ It builds on [AstroWeather](https://github.com/mawinkler/astroweather) for the f
 
 1. HACS → ⋮ → **Custom repositories** → add `https://github.com/fwump38/milky-way-planner` as an **Integration**.
 2. Install **Milky Way Planner** and restart Home Assistant.
-3. **Settings → Devices & services → Add integration → Milky Way Planner**, then pick your AstroWeather sites and give each a
-   Bortle class (and optionally a drive time). Everything else is under **Configure**.
+3. **Settings → Devices & services → Add integration → Milky Way Planner**. Every AstroWeather site is pre-selected; untick any you
+   don't want. Tick **Review each site's details** only if you want to set a name, Bortle class, drive time or coordinates yourself.
+   Everything else is under **Configure**.
+
+**Where site values come from.** Coordinates are read from AstroWeather. The Bortle class is *estimated* from nearby towns
+(GeoNames, Walker's law), which is rough: it ignores industry, roads and terrain, so set the Bortle class yourself in the site's
+details if you know it. Drive time is looked up (OSRM) after setup. Each site's score sensor has a `source` attribute showing
+which of these were configured, estimated, read from AstroWeather or computed.
 
 With no sites, everything is computed for your Home Assistant location.
 
@@ -120,15 +126,19 @@ actions:
 
 ## Using it with the card
 
-If this integration is installed, the card automatically asks it for the astronomy (calendar nights, moon rise/set, core window)
-and falls back to its own identical calculations if it isn't there, so the card still works on its own. The integration exposes a
-small websocket API (`milky_way_planner/info`, `nights`, `light_domes` and, for admins, `find_light_domes`) for this.
+The [Milky Way Planner card](https://github.com/fwump38/milky-way-planner-card) is only a display for this integration: it calculates nothing
+itself and needs this integration installed. It uses a small websocket API (`milky_way_planner/info`, `overview`, `calendar`, `sky_hours`,
+`light_domes` and, for admins, `find_light_domes`, API version 2). `overview` returns each site with its settings and where they came from,
+and each site's scored nights; the card shows the Bortle class with a "~" when it was estimated.
 
 ## Privacy
 
 Drive times (optional, on by default) are looked up from the public [OSRM demo server](https://router.project-osrm.org), which receives
 your Home Assistant location and each site's location, rounded to about 1 km. Each route is requested once and cached. If it can't be
 reached, a straight-line estimate is used. Turn it off in the options, or give a site a drive time.
+
+The Bortle estimate downloads the same public [GeoNames](https://www.geonames.org) `cities1000` file as the light-dome lookup (and falls back to
+Wikidata, which would receive a bounding box around your sites). Your coordinates are not sent anywhere for the GeoNames route.
 
 ## Development
 
@@ -137,7 +147,10 @@ uv venv --python 3.13 .venv && uv pip install --python .venv/bin/python -r requi
 .venv/bin/python -m pytest
 ```
 
-`tests/fixtures/ts-nights.json` is generated from the card's TypeScript and pins the two implementations to each other.
+`tests/fixtures/ts-nights.json` was generated from the card's old TypeScript astronomy (since removed) and still pins these calculations to it;
+`tests/test_capture_the_atlas.py` checks them against Capture the Atlas's published 2026 calendar.
+
+The card's dev harness uses `scripts/export_card_mock.py` to write canned responses (see the card's README).
 
 City data: [GeoNames](https://www.geonames.org), licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); fallback [Wikidata](https://www.wikidata.org) (CC0).
 

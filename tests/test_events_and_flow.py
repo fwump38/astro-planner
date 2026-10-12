@@ -63,11 +63,28 @@ async def test_config_flow_creates_entry_with_site_details(hass: HomeAssistant):
     hass.states.async_set(SITE, "sunny", {"location_name": "Kanab"})
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
     assert result["type"] is FlowResultType.FORM and result["step_id"] == "user"
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"sites": [SITE]})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"sites": [SITE], "review_sites": True})
     assert result["step_id"] == "site"
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"bortle": 2, "drive_minutes": 90})
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["options"]["sites"] == [{"entity": SITE, "bortle": 2, "drive_minutes": 90}]
+
+
+async def test_config_flow_preselects_astroweather_sites_and_skips_details(hass: HomeAssistant):
+    from homeassistant.helpers import entity_registry as er
+
+    reg = er.async_get(hass)
+    for name in ("kanab", "home"):
+        reg.async_get_or_create("weather", "astroweather", name, suggested_object_id=f"astroweather_{name}")
+    reg.async_get_or_create("weather", "other", "x", suggested_object_id="other_weather")
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
+    key = next(k for k in result["data_schema"].schema if k == "sites")
+    assert key.default() == ["weather.astroweather_home", "weather.astroweather_kanab"]
+    review = next(k for k in result["data_schema"].schema if k == "review_sites")
+    assert review.default() is False
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"sites": ["weather.astroweather_kanab"], "review_sites": False})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["options"]["sites"] == [{"entity": "weather.astroweather_kanab"}]
 
 
 async def test_single_instance(hass: HomeAssistant):

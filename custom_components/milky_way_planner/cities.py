@@ -270,10 +270,11 @@ def _describe(name: str, err: BaseException) -> str:
     return f"{name}: {err}"
 
 
-async def async_find_domes(hass: HomeAssistant, points: list[Observer], radius_km: float) -> LookupResult:
-    """Look up the light domes around `points`: GeoNames first, then Wikidata. Raises CityLookupError if both fail."""
-    if not points:
-        return LookupResult([], "none", 0)
+async def async_find_places(hass: HomeAssistant, points: list[Observer], radius_km: float) -> tuple[list[Place], LookupResult]:
+    """Metro-merged places around `points`: GeoNames first, then Wikidata. Raises CityLookupError if both fail.
+
+    The second value carries the source and counts (its `domes` is empty); `async_find_domes` fills it in.
+    """
     failures: list[str] = []
     for source, fetch in (("geonames", _geonames_places), ("wikidata", _wikidata_places)):
         try:
@@ -286,9 +287,17 @@ async def async_find_domes(hass: HomeAssistant, points: list[Observer], radius_k
             failures.append(f"{source}: no places found")
             continue
         metros = await hass.async_add_executor_job(merge_metros, places)
-        domes = await hass.async_add_executor_job(domes_from_places, metros, points, radius_km)
-        return LookupResult(domes, source, len(places), failures)
+        return metros, LookupResult([], source, len(places), failures)
     raise CityLookupError(failures)
+
+
+async def async_find_domes(hass: HomeAssistant, points: list[Observer], radius_km: float) -> LookupResult:
+    """Look up the light domes around `points`: GeoNames first, then Wikidata. Raises CityLookupError if both fail."""
+    if not points:
+        return LookupResult([], "none", 0)
+    metros, found = await async_find_places(hass, points, radius_km)
+    found.domes = await hass.async_add_executor_job(domes_from_places, metros, points, radius_km)
+    return found
 
 
 def lookup_points(home: Observer, sites: list[Observer]) -> list[Observer]:

@@ -1,7 +1,7 @@
 """Constants for Milky Way Planner."""
 
 DOMAIN = "milky_way_planner"
-API_VERSION = 1
+API_VERSION = 2
 
 CONF_SITES = "sites"
 CONF_ENTITY = "entity"

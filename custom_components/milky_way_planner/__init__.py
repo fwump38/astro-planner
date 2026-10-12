@@ -11,6 +11,8 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.util import dt as dt_util
 
+from .astro import Observer
+from .bortle import BortleEstimates
 from .cities import cache_path
 from .config import build_config
 from .const import DOMAIN
@@ -35,13 +37,15 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: PlannerEntry) -> bool:
     drive = DriveTimes(hass)
     await drive.async_load()
-    config = build_config(hass, dict(entry.options), drive.cached)
+    bortle = BortleEstimates(hass)
+    await bortle.async_load()
+    config = build_config(hass, dict(entry.options), drive.cached, drive.cached_source, bortle.cached)
     engine = Engine(config, dt_util.get_default_time_zone())
     planner = PlannerCoordinator(hass, entry, engine)
     live = LiveCoordinator(hass, entry, engine)
     await planner.async_config_entry_first_refresh()
     await live.async_config_entry_first_refresh()
-    entry.runtime_data = PlannerRuntime(engine, planner, live, drive)
+    entry.runtime_data = PlannerRuntime(engine, planner, live, drive, bortle)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     planner.async_start_listening()
@@ -50,7 +54,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: PlannerEntry) -> bool:
 
     if config.auto_drive_time:
         entry.async_create_background_task(hass, _lookup_drive_times(planner, drive), "milky_way_planner drive times")
+    to_estimate = [s.observer for s in config.sites if s.observer and s.bortle_source == "default"]
+    if to_estimate:
+        entry.async_create_background_task(hass, _estimate_bortle(hass, entry, bortle, to_estimate), "milky_way_planner bortle estimates")
     return True
+
+
+async def _estimate_bortle(hass: HomeAssistant, entry: ConfigEntry, bortle: BortleEstimates, sites: list[Observer]) -> None:
+    # The estimates change every score at the site, so reload once they're in (they're cached, so this happens once).
+    if await bortle.async_estimate(sites):
+        hass.config_entries.async_schedule_reload(entry.entry_id)
 
 
 async def _lookup_drive_times(planner: PlannerCoordinator, drive: DriveTimes) -> None:
@@ -62,6 +75,7 @@ async def _lookup_drive_times(planner: PlannerCoordinator, drive: DriveTimes) ->
         minutes = await drive.async_get(config.home, site.observer)
         if minutes:
             site.drive_minutes, site.drive_estimated, changed = minutes, True, True
+            site.drive_source = drive.cached_source(config.home, site.observer) or "estimate"
     if changed:
         planner.async_update_listeners()
 

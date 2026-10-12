@@ -1,0 +1,214 @@
+{
+ "_comment": "Capture the Atlas 2026 Milky Way calendar, Southwest USA (37\u00b0N, Kanab UT). Weekly rows starting Sat 3 Jan 2026. color = row colour (pink best / blue short / dark none); coreMinutes = 'Galactic Center Visibility' hours (moon-aware), read from the published table image.",
+ "start": "2026-01-03",
+ "rows": [
+  {
+   "color": "dark",
+   "coreMinutes": 0
+  },
+  {
+   "color": "dark",
+   "coreMinutes": 0
+  },
+  {
+   "color": "blue",
+   "coreMinutes": 12
+  },
+  {
+   "color": "blue",
+   "coreMinutes": 37
+  },
+  {
+   "color": "dark",
+   "coreMinutes": 0
+  },
+  {
+   "color": "dark",
+   "coreMinutes": 0
+  },
+  {
+   "color": "blue",
+   "coreMinutes": 103
+  },
+  {
+   "color": "blue",
+   "coreMinutes": 123
+  },
+  {
+   "color": "dark",
+   "coreMinutes": 0
+  },
+  {
+   "color": "dark",
+   "coreMinutes": 0
+  },
+  {
+   "color": "blue",
+   "coreMinutes": 177
+  },
+  {
+   "color": "pink",
+   "coreMinutes": 193
+  },
+  {
+   "color": "blue",
+   "coreMinutes": 11
+  },
+  {
+   "color": "dark",
+   "coreMinutes": 0
+  },
+  {
+   "color": "pink",
+   "coreMinutes": 241
+  },
+  {
+   "color": "pink",
+   "coreMinutes": 257
+  },
+  {
+   "color": "blue",
+   "coreMinutes": 54
+  },
+  {
+   "color": "dark",
+   "coreMinutes": 0
+  },
+  {
+   "color": "pink",
+   "coreMinutes": 196
+  },
+  {
+   "color": "pink",
+   "coreMinutes": 326
+  },
+  {
+   "color": "blue",
+   "coreMinutes": 108
+  },
+  {
+   "color": "dark",
+   "coreMinutes": 0
+  },
+  {
+   "color": "blue",
+   "coreMinutes": 159
+  },
+  {
+   "color": "pink",
+   "coreMinutes": 330
+  },
+  {
+   "color": "pink",
+   "coreMinutes": 190
+  },
+  {
+   "color": "dark",
+   "coreMinutes": 0
+  },
+  {
+   "color": "blue",
+   "coreMinutes": 61
+  },
+  {
+   "color": "pink",
+   "coreMinutes": 333
+  },
+  {
+   "color": "pink",
+   "coreMinutes": 257
+  },
+  {
+   "color": "dark",
+   "coreMinutes": 0
+  },
+  {
+   "color": "dark",
+   "coreMinutes": 0
+  },
+  {
+   "color": "pink",
+   "coreMinutes": 255
+  },
+  {
+   "color": "pink",
+   "coreMinutes": 239
+  },
+  {
+   "color": "dark",
+   "coreMinutes": 0
+  },
+  {
+   "color": "dark",
+   "coreMinutes": 0
+  },
+  {
+   "color": "pink",
+   "coreMinutes": 192
+  },
+  {
+   "color": "blue",
+   "coreMinutes": 176
+  },
+  {
+   "color": "dark",
+   "coreMinutes": 0
+  },
+  {
+   "color": "dark",
+   "coreMinutes": 0
+  },
+  {
+   "color": "blue",
+   "coreMinutes": 127
+  },
+  {
+   "color": "blue",
+   "coreMinutes": 110
+  },
+  {
+   "color": "dark",
+   "coreMinutes": 0
+  },
+  {
+   "color": "dark",
+   "coreMinutes": 0
+  },
+  {
+   "color": "blue",
+   "coreMinutes": 52
+  },
+  {
+   "color": "blue",
+   "coreMinutes": 31
+  },
+  {
+   "color": "dark",
+   "coreMinutes": 0
+  },
+  {
+   "color": "dark",
+   "coreMinutes": 0
+  },
+  {
+   "color": "dark",
+   "coreMinutes": 0
+  },
+  {
+   "color": "dark",
+   "coreMinutes": 0
+  },
+  {
+   "color": "dark",
+   "coreMinutes": 0
+  },
+  {
+   "color": "dark",
+   "coreMinutes": 0
+  },
+  {
+   "color": "dark",
+   "coreMinutes": 0
+  }
+ ]
+}

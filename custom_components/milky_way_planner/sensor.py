@@ -151,9 +151,8 @@ class LiveSensor(PlannerEntity, SensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
         fn = self.entity_description.attrs_fn
-        if fn is None:
-            return None
-        attrs = fn(self.coordinator.data)
+        # Everything here is calculated by this integration from the sky (not read from AstroWeather).
+        attrs = {**(fn(self.coordinator.data) if fn else {}), "source": "computed"}
         if self.entity_description.key == "milky_way":
             ref = self.coordinator.engine.config.reference
             attrs = {**attrs, "latitude": round(ref.latitude, 4), "longitude": round(ref.longitude, 4)}
@@ -242,6 +241,14 @@ class SiteScoreSensor(PlannerEntity, SensorEntity):
             "site_entity": site.entity,
             "bortle": site.bortle,
             "drive_minutes": site.drive_minutes,
+            # Where each input came from: the forecast is read from AstroWeather, the sky is computed here.
+            "source": {
+                "forecast": "astroweather" if data.forecast_end.get(site.entity) else None,
+                "sky": "computed",
+                "coordinates": site.coordinates_source,
+                "bortle": site.bortle_source,
+                "drive_time": site.drive_source,
+            },
             "forecast_until": end.isoformat() if (end := data.forecast_end.get(site.entity)) else None,
             "astro_only": tonight.astro_only if tonight else None,
             "nights": nights,
