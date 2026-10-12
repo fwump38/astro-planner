@@ -30,7 +30,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: PlannerEntry, async_add_
 class MilkyWayEvents(EventEntity):
     _attr_has_entity_name = True
     _attr_translation_key = "events"
-    _attr_event_types = [EVENT_WINDOW_START, EVENT_WINDOW_END, EVENT_FORECAST_GOOD, EVENT_FORECAST_DROPPED]
+    _attr_event_types = [EVENT_WINDOW_START, EVENT_WINDOW_END, EVENT_FORECAST_GOOD, EVENT_FORECAST_DROPPED]  # noqa: RUF012
     _attr_should_poll = False
 
     def __init__(self, planner: PlannerCoordinator, entry_id: str) -> None:

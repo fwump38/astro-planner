@@ -147,7 +147,7 @@ async def test_options_flow_finds_and_stores_domes(hass: HomeAssistant, aioclien
         await hass.async_block_till_done()
         result = await hass.config_entries.options.async_configure(result["flow_id"])
     assert result["step_id"] == "review_domes"
-    default = [k for k in result["data_schema"].schema if k == "light_domes"][0].default()
+    default = next(k for k in result["data_schema"].schema if k == "light_domes").default()
     assert [d["name"] for d in default] == ["Manual", "Albuquerque", "Santa Fe"]  # existing entries kept, new ones added
     result = await hass.config_entries.options.async_configure(result["flow_id"], {"light_domes": default})
     assert result["type"] is FlowResultType.CREATE_ENTRY
