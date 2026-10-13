@@ -9,7 +9,7 @@ from typing import Any
 
 import astronomy as ae
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
@@ -60,8 +60,14 @@ class PlannerCoordinator(DataUpdateCoordinator[PlannerData]):
     def async_start_listening(self) -> None:
         """Refresh when a site's weather entity updates (the coordinator debounces bursts)."""
         entities = [s.entity for s in self.config.sites]
-        if entities:
-            self._unsub_states = async_track_state_change_event(self.hass, entities, lambda _e: self.hass.async_create_task(self.async_request_refresh()))
+        if not entities:
+            return
+
+        @callback
+        def _on_change(_event: Event) -> None:
+            self.hass.async_create_task(self.async_request_refresh())
+
+        self._unsub_states = async_track_state_change_event(self.hass, entities, _on_change)
 
     @callback
     def async_stop_listening(self) -> None:
