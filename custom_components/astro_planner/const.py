@@ -1,7 +1,7 @@
-"""Constants for Milky Way Planner."""
+"""Constants for Astro Planner."""
 
-DOMAIN = "milky_way_planner"
-API_VERSION = 2
+DOMAIN = "astro_planner"
+API_VERSION = 3
 
 CONF_SITES = "sites"
 CONF_ENTITY = "entity"
@@ -22,6 +22,11 @@ CONF_DOME_WARNING = "dome_warning_threshold"
 CONF_NIGHTS = "nights"
 CONF_GOOD_SCORE = "good_score_threshold"
 CONF_AUTO_DRIVE = "auto_drive_time"
+CONF_TARGET_MIN_ALTITUDE = "target_min_altitude"
+CONF_TARGET_MAX_MAGNITUDE = "target_max_magnitude"
+CONF_FOV = "fov_arcmin"
+CONF_WATCH_TARGETS = "watch_targets"
+CONF_CUSTOM_TARGETS = "custom_targets"
 
 DEFAULT_BORTLE = 3
 DEFAULTS = {
@@ -34,6 +39,9 @@ DEFAULTS = {
     CONF_NIGHTS: 7,
     CONF_GOOD_SCORE: 70,
     CONF_AUTO_DRIVE: True,
+    CONF_TARGET_MIN_ALTITUDE: 30,
+    CONF_TARGET_MAX_MAGNITUDE: 12,
+    CONF_FOV: 0,
 }
 
 FORECAST_REFRESH_MINUTES = 30
@@ -51,3 +59,10 @@ EVENT_WINDOW_START = "window_start"
 EVENT_WINDOW_END = "window_end"
 EVENT_FORECAST_GOOD = "forecast_good"
 EVENT_FORECAST_DROPPED = "forecast_dropped"
+EVENT_TARGET_GOOD = "target_good"
+EVENT_TARGET_DROPPED = "target_dropped"
+
+# A night counts as "moonless" for the calendar when it has at least this many minutes of moon-free astronomical darkness.
+MOONLESS_MIN_MINUTES = 120
+# Per site and night, the top-ranked targets kept in the coordinator's data (watched targets are always kept).
+TOP_TARGETS = 15

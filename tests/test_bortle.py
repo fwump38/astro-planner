@@ -1,7 +1,7 @@
-from custom_components.milky_way_planner.astro import Observer
-from custom_components.milky_way_planner.bortle import bortle_from_sqm, estimate_bortle, sky_brightness
-from custom_components.milky_way_planner.cities import Place
-from custom_components.milky_way_planner.config import build_config
+from custom_components.astro_planner.astro import Observer
+from custom_components.astro_planner.bortle import bortle_from_sqm, estimate_bortle, sky_brightness
+from custom_components.astro_planner.cities import Place
+from custom_components.astro_planner.config import build_config
 
 SITE = Observer(37.05, -112.5)
 

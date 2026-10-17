@@ -1,4 +1,4 @@
-"""Websocket API used by the Milky Way Planner card to offload its astronomy to the integration."""
+"""Websocket API used by the Astro Planner card to offload its astronomy to the integration."""
 
 from __future__ import annotations
 
@@ -14,8 +14,11 @@ from .astro import NightSummary, Observer, compute_night, sample_sky
 from .cities import CityLookupError, async_find_domes
 from .config import Site
 from .const import API_VERSION, CONF_LIGHT_DOMES, CONF_LIGHT_DOMES_INFO, DOMAIN
+from .showers import SHOWERS, is_active, outlook, upcoming
+from .target_view import targets_payload
 
 MAX_DAYS = 62
+MAX_TARGET_DAYS = 31
 
 
 def _iso(dt: datetime | None) -> str | None:
@@ -80,11 +83,13 @@ def async_register_websocket(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_overview)
     websocket_api.async_register_command(hass, ws_calendar)
     websocket_api.async_register_command(hass, ws_sky_hours)
+    websocket_api.async_register_command(hass, ws_targets)
+    websocket_api.async_register_command(hass, ws_showers)
     websocket_api.async_register_command(hass, ws_light_domes)
     websocket_api.async_register_command(hass, ws_find_light_domes)
 
 
-@websocket_api.websocket_command({vol.Required("type"): "milky_way_planner/info"})
+@websocket_api.websocket_command({vol.Required("type"): "astro_planner/info"})
 @websocket_api.async_response
 async def ws_info(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
     connection.send_result(msg["id"], {"api_version": API_VERSION})
@@ -104,7 +109,7 @@ def _runtime(hass: HomeAssistant, connection: websocket_api.ActiveConnection, ms
     for entry in hass.config_entries.async_entries(DOMAIN):
         if entry.state is ConfigEntryState.LOADED:
             return entry.runtime_data
-    connection.send_error(msg["id"], "not_loaded", "Milky Way Planner isn't set up")
+    connection.send_error(msg["id"], "not_loaded", "Astro Planner isn't set up")
     return None
 
 
@@ -127,7 +132,7 @@ def _observer_json(o: Observer) -> dict[str, float]:
     return {"latitude": o.latitude, "longitude": o.longitude, "elevation": o.elevation}
 
 
-@websocket_api.websocket_command({vol.Required("type"): "milky_way_planner/overview"})
+@websocket_api.websocket_command({vol.Required("type"): "astro_planner/overview"})
 @websocket_api.async_response
 async def ws_overview(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
     """Everything the card's Tonight and calendar-badge views show: the sites, their settings and each site's scored nights."""
@@ -151,6 +156,20 @@ async def ws_overview(hass: HomeAssistant, connection: websocket_api.ActiveConne
                     "weather": sc.weather,
                     "cloud": sc.cloud,
                     "dome_warning": sc.dome_warning,
+                    "milky_way": sc.milky_way,
+                    "sky": sc.sky,
+                    "targets": [
+                        {
+                            "id": t.night.target.id,
+                            "label": t.night.target.label,
+                            "kind": t.night.target.kind,
+                            "score": t.score,
+                            "minutes": t.night.minutes,
+                            "peak_altitude": round(t.night.peak_altitude),
+                            "direction": t.night.direction,
+                        }
+                        for t in data.targets.get(site.entity, {}).get(d, [])[:5]
+                    ],
                     "night": serialize_night(sc.night, False),
                 }
             )
@@ -168,6 +187,9 @@ async def ws_overview(hass: HomeAssistant, connection: websocket_api.ActiveConne
                 "calendar_min_altitude": cfg.calendar_min_altitude,
                 "calendar_best_minutes": cfg.calendar_best_minutes,
                 "dome_warning_threshold": cfg.dome_warning_threshold,
+                "target_min_altitude": cfg.target_min_altitude,
+                "target_max_magnitude": cfg.target_max_magnitude,
+                "fov_arcmin": cfg.fov_arcmin,
             },
             "sites": [_site_json(s) for s in cfg.sites],
             "scores": scores,
@@ -185,7 +207,57 @@ def _calendar(rt, start: date, days: int) -> list[dict[str, Any]]:
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): "milky_way_planner/calendar",
+        vol.Required("type"): "astro_planner/targets",
+        vol.Optional("start"): vol.Coerce(date.fromisoformat),
+        vol.Optional("days", default=1): vol.All(vol.Coerce(int), vol.Range(min=1, max=MAX_TARGET_DAYS)),
+    }
+)
+@websocket_api.async_response
+async def ws_targets(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """Messier objects, planets and custom targets that are up after dark at the Home Assistant location."""
+    rt = _runtime(hass, connection, msg)
+    if rt is None:
+        return
+    start = msg.get("start") or rt.planner.data.tonight
+    payload = await hass.async_add_executor_job(targets_payload, rt.engine, start, msg["days"])
+    connection.send_result(msg["id"], {"api_version": API_VERSION, **payload})
+
+
+@websocket_api.websocket_command({vol.Required("type"): "astro_planner/showers", vol.Optional("count", default=5): vol.All(vol.Coerce(int), vol.Range(min=1, max=len(SHOWERS)))})
+@websocket_api.async_response
+async def ws_showers(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """The next meteor showers to peak, each rated for its peak night here."""
+    rt = _runtime(hass, connection, msg)
+    if rt is None:
+        return
+    today = rt.planner.data.tonight
+
+    def build() -> list[dict[str, Any]]:
+        out = []
+        for shower, peak in upcoming(today, msg["count"]):
+            o = outlook(shower, peak, rt.engine.home_dark(peak))
+            out.append(
+                {
+                    "id": shower.id,
+                    "name": shower.name,
+                    "peak": peak.isoformat(),
+                    "days_until": (peak - today).days,
+                    "active": is_active(shower, today),
+                    "zhr": shower.zhr,
+                    "radiant_peak_altitude": round(o.radiant_peak_altitude),
+                    "moon_illumination": round(o.moon_illumination * 100),
+                    "moon_free_minutes": o.moon_free_minutes,
+                    "rating": o.rating,
+                }
+            )
+        return out
+
+    connection.send_result(msg["id"], {"api_version": API_VERSION, "showers": await hass.async_add_executor_job(build)})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "astro_planner/calendar",
         vol.Required("start"): vol.Coerce(date.fromisoformat),
         vol.Required("days"): vol.All(vol.Coerce(int), vol.Range(min=1, max=MAX_DAYS)),
     }
@@ -222,7 +294,7 @@ def _sky_hours(rt, site: Site, start: datetime, hours: int) -> list[dict[str, An
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): "milky_way_planner/sky_hours",
+        vol.Required("type"): "astro_planner/sky_hours",
         vol.Required("entity"): str,
         vol.Required("start"): vol.Coerce(datetime.fromisoformat),
         vol.Required("hours"): vol.All(vol.Coerce(int), vol.Range(min=1, max=96)),
@@ -251,7 +323,7 @@ def _entry_options(hass: HomeAssistant) -> dict[str, Any] | None:
     return None
 
 
-@websocket_api.websocket_command({vol.Required("type"): "milky_way_planner/light_domes"})
+@websocket_api.websocket_command({vol.Required("type"): "astro_planner/light_domes"})
 @websocket_api.async_response
 async def ws_light_domes(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
     """The light domes stored in the integration (from its "Find nearby cities" lookup or edited by hand)."""
@@ -264,7 +336,7 @@ async def ws_light_domes(hass: HomeAssistant, connection: websocket_api.ActiveCo
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): "milky_way_planner/find_light_domes",
+        vol.Required("type"): "astro_planner/find_light_domes",
         vol.Required("points"): vol.All([_OBSERVER], vol.Length(min=1, max=30)),
         vol.Optional("radius_km", default=250): vol.All(vol.Coerce(float), vol.Range(min=10, max=600)),
     }

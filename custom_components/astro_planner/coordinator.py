@@ -17,9 +17,10 @@ from homeassistant.util import dt as dt_util
 
 from .astro import GalacticCenter, NightSummary, body_altitude, galactic_center_position, next_crossing, to_time
 from .config import PlannerConfig, Site
-from .const import FORECAST_REFRESH_MINUTES, LIVE_REFRESH_SECONDS, SEARCH_DAYS
+from .const import FORECAST_REFRESH_MINUTES, LIVE_REFRESH_SECONDS, SEARCH_DAYS, TOP_TARGETS
 from .engine import Engine
-from .scoring import EMPTY_FORECAST, Forecast, NightScore
+from .scoring import EMPTY_FORECAST, Forecast, NightScore, TargetScore
+from .targets import DarkNight, TargetNight
 
 _LOGGER = logging.getLogger(__name__)
 MOON_UP_ALT = -0.5
@@ -33,9 +34,18 @@ class PlannerData:
     scores: dict[str, dict[date, NightScore | None]]
     forecast_end: dict[str, datetime | None]
     best: dict[date, tuple[Site, NightScore]] = field(default_factory=dict)
+    # Per site and night, the best-placed targets (the top few plus any watched ones), best first. The Milky Way core is one of them.
+    targets: dict[str, dict[date, list[TargetScore]]] = field(default_factory=dict)
+    best_target: dict[date, tuple[Site, TargetScore]] = field(default_factory=dict)
+    # Every target's night and the dark hours at the Home Assistant location.
+    home_targets: dict[date, list[TargetNight]] = field(default_factory=dict)
+    home_dark: dict[date, DarkNight] = field(default_factory=dict)
 
     def best_site(self, d: date) -> tuple[Site, NightScore] | None:
         return self.best.get(d)
+
+    def best_target_on(self, d: date) -> tuple[Site, TargetScore] | None:
+        return self.best_target.get(d)
 
 
 class PlannerCoordinator(DataUpdateCoordinator[PlannerData]):
@@ -43,7 +53,7 @@ class PlannerCoordinator(DataUpdateCoordinator[PlannerData]):
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry, engine: Engine) -> None:
         super().__init__(
-            hass, _LOGGER, config_entry=entry, name="Milky Way Planner", update_interval=timedelta(minutes=FORECAST_REFRESH_MINUTES)
+            hass, _LOGGER, config_entry=entry, name="Astro Planner", update_interval=timedelta(minutes=FORECAST_REFRESH_MINUTES)
         )
         self.engine = engine
         self._forecasts: dict[str, Forecast] = {}
@@ -100,13 +110,24 @@ class PlannerCoordinator(DataUpdateCoordinator[PlannerData]):
         ref = {d: engine.ref_night(d) for d in dates}
         scores: dict[str, dict[date, NightScore | None]] = {}
         best: dict[date, tuple[Site, NightScore]] = {}
+        targets: dict[str, dict[date, list[TargetScore]]] = {}
+        best_target: dict[date, tuple[Site, TargetScore]] = {}
+        watched = set(self.config.watch_targets)
         for site in self.config.sites:
             fc = self.forecast_for(site.entity)
             scores[site.entity] = {d: engine.score(site, d, fc) for d in dates}
+            targets[site.entity] = {}
             for d, sc in scores[site.entity].items():
                 if sc and sc.score is not None and (d not in best or sc.score > (best[d][1].score or 0)):
                     best[d] = (site, sc)
-        return PlannerData(tonight, dates, ref, scores, {e: f.end for e, f in self._forecasts.items()}, best)
+            for d in dates:
+                ranked = engine.score_targets(site, d, fc)
+                targets[site.entity][d] = ranked[:TOP_TARGETS] + [t for t in ranked[TOP_TARGETS:] if t.night.target.id in watched]
+                if ranked and (d not in best_target or ranked[0].score > best_target[d][1].score):
+                    best_target[d] = (site, ranked[0])
+        home_targets = {d: engine.home_targets(d) for d in dates}
+        home_dark = {d: engine.home_dark(d) for d in dates}
+        return PlannerData(tonight, dates, ref, scores, {e: f.end for e, f in self._forecasts.items()}, best, targets, best_target, home_targets, home_dark)
 
 
 @dataclass
@@ -133,7 +154,7 @@ class LiveCoordinator(DataUpdateCoordinator[LiveState]):
     """Sun-style live values: position of the core and moon plus the next rise/set and window times."""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry, engine: Engine) -> None:
-        super().__init__(hass, _LOGGER, config_entry=entry, name="Milky Way live sky", update_interval=timedelta(seconds=LIVE_REFRESH_SECONDS))
+        super().__init__(hass, _LOGGER, config_entry=entry, name="Astro Planner live sky", update_interval=timedelta(seconds=LIVE_REFRESH_SECONDS))
         self.engine = engine
         self._crossings: dict[str, datetime | None] = {}
         self._crossings_valid_until = dt_util.utc_from_timestamp(0)

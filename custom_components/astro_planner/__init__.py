@@ -1,4 +1,4 @@
-"""Milky Way Planner: Milky Way core calendars, sensors, events and a best-night service for astrophotographers."""
+"""Astro Planner: dark-sky site scoring, target visibility, calendars, sensors, events and services for astrophotographers."""
 
 from __future__ import annotations
 
@@ -53,10 +53,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: PlannerEntry) -> bool:
     entry.async_on_unload(entry.add_update_listener(_reload))
 
     if config.auto_drive_time:
-        entry.async_create_background_task(hass, _lookup_drive_times(planner, drive), "milky_way_planner drive times")
+        entry.async_create_background_task(hass, _lookup_drive_times(planner, drive), "astro_planner drive times")
     to_estimate = [s.observer for s in config.sites if s.observer and s.bortle_source == "default"]
     if to_estimate:
-        entry.async_create_background_task(hass, _estimate_bortle(hass, entry, bortle, to_estimate), "milky_way_planner bortle estimates")
+        entry.async_create_background_task(hass, _estimate_bortle(hass, entry, bortle, to_estimate), "astro_planner bortle estimates")
     return True
 
 

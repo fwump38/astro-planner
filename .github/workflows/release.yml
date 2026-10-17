@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Check tag matches manifest version
         run: |
-          v="v$(python3 -c "import json; print(json.load(open('custom_components/milky_way_planner/manifest.json'))['version'])")"
+          v="v$(python3 -c "import json; print(json.load(open('custom_components/astro_planner/manifest.json'))['version'])")"
           [ "$v" = "${GITHUB_REF_NAME}" ] || { echo "Tag ${GITHUB_REF_NAME} does not match manifest version ${v}" >&2; exit 1; }
       - uses: actions/setup-python@v5
         with:

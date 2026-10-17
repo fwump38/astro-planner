@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from custom_components.milky_way_planner.astro import Observer, SkyOptions, compute_night
+from custom_components.astro_planner.astro import Observer, SkyOptions, compute_night
 
 KANAB = Observer(37.047, -112.527, 1500)
 DENVER = ZoneInfo("America/Denver")

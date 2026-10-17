@@ -12,7 +12,7 @@ def device_info(entry_id: str, key: str, name: str, via: str | None = None) -> D
     info = DeviceInfo(
         identifiers={(DOMAIN, f"{entry_id}_{key}")},
         name=name,
-        manufacturer="Milky Way Planner",
+        manufacturer="Astro Planner",
         entry_type=DeviceEntryType.SERVICE,
     )
     if via:

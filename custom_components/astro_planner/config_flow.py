@@ -19,10 +19,12 @@ from .const import (
     CONF_BORTLE,
     CONF_CAL_BEST_MINUTES,
     CONF_CAL_MIN_ALTITUDE,
+    CONF_CUSTOM_TARGETS,
     CONF_DOME_SIGMA,
     CONF_DOME_WARNING,
     CONF_DRIVE_MINUTES,
     CONF_ENTITY,
+    CONF_FOV,
     CONF_GOOD_SCORE,
     CONF_LATITUDE,
     CONF_LIGHT_DOMES,
@@ -33,11 +35,15 @@ from .const import (
     CONF_NAME,
     CONF_NIGHTS,
     CONF_SITES,
+    CONF_TARGET_MAX_MAGNITUDE,
+    CONF_TARGET_MIN_ALTITUDE,
+    CONF_WATCH_TARGETS,
     CONF_WEIGHTS,
     DEFAULTS,
     DOMAIN,
 )
 from .scoring import DEFAULT_WEIGHTS
+from .targets import MILKY_WAY, all_targets, custom_targets
 
 
 def _num(lo: float, hi: float, step: float | str = 1, unit: str | None = None) -> selector.NumberSelector:
@@ -112,13 +118,13 @@ class SitesFlowMixin:
         )
 
 
-class MilkyWayPlannerConfigFlow(SitesFlowMixin, ConfigFlow, domain=DOMAIN):
+class AstroPlannerConfigFlow(SitesFlowMixin, ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     @staticmethod
     @callback
-    def async_get_options_flow(config_entry: ConfigEntry) -> MilkyWayPlannerOptionsFlow:
-        return MilkyWayPlannerOptionsFlow()
+    def async_get_options_flow(config_entry: ConfigEntry) -> AstroPlannerOptionsFlow:
+        return AstroPlannerOptionsFlow()
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         await self.async_set_unique_id(DOMAIN)
@@ -129,12 +135,12 @@ class MilkyWayPlannerConfigFlow(SitesFlowMixin, ConfigFlow, domain=DOMAIN):
         return self.async_show_form(step_id="user", data_schema=self._sites_schema(discover_sites(self.hass)))
 
     async def _sites_done(self) -> ConfigFlowResult:
-        return self.async_create_entry(title="Milky Way Planner", data={}, options={CONF_SITES: self._sites})
+        return self.async_create_entry(title="Astro Planner", data={}, options={CONF_SITES: self._sites})
 
 
-class MilkyWayPlannerOptionsFlow(SitesFlowMixin, OptionsFlow):
+class AstroPlannerOptionsFlow(SitesFlowMixin, OptionsFlow):
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        return self.async_show_menu(step_id="init", menu_options=["sites", "sky", "scoring", "domes"])
+        return self.async_show_menu(step_id="init", menu_options=["sites", "sky", "targets", "custom_targets", "scoring", "domes"])
 
     def _save(self, **changes: Any) -> ConfigFlowResult:
         return self.async_create_entry(data={**self.config_entry.options, **changes})
@@ -172,6 +178,40 @@ class MilkyWayPlannerOptionsFlow(SitesFlowMixin, OptionsFlow):
             }
         )
         return self.async_show_form(step_id="sky", data_schema=schema)
+
+    # -- targets -------------------------------------------------------------------------------
+
+    async def async_step_targets(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        if user_input is not None:
+            return self._save(**user_input)
+        d = self._opt
+        custom = self.config_entry.options.get(CONF_CUSTOM_TARGETS)
+        choices = [selector.SelectOptionDict(value=t.id, label=t.label) for t in [MILKY_WAY, *all_targets(custom)]]
+        valid = {c["value"] for c in choices}
+        watched = [t for t in (self.config_entry.options.get(CONF_WATCH_TARGETS) or []) if t in valid]
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_TARGET_MIN_ALTITUDE, default=d(CONF_TARGET_MIN_ALTITUDE)): _num(10, 80, 1, "°"),
+                vol.Required(CONF_TARGET_MAX_MAGNITUDE, default=d(CONF_TARGET_MAX_MAGNITUDE)): _num(4, 16, 0.5),
+                vol.Required(CONF_FOV, default=d(CONF_FOV)): _num(0, 1200, 1, "arcmin"),
+                vol.Optional(CONF_WATCH_TARGETS, default=watched): selector.SelectSelector(
+                    selector.SelectSelectorConfig(options=choices, multiple=True, mode=selector.SelectSelectorMode.DROPDOWN)
+                ),
+            }
+        )
+        return self.async_show_form(step_id="targets", data_schema=schema)
+
+    async def async_step_custom_targets(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
+        current = self.config_entry.options.get(CONF_CUSTOM_TARGETS, [])
+        if user_input is not None:
+            rows = user_input.get(CONF_CUSTOM_TARGETS) or []
+            if len(custom_targets(rows)) != len(rows):
+                errors["base"] = "invalid_targets"
+            else:
+                return self._save(**{CONF_CUSTOM_TARGETS: rows})
+        schema = vol.Schema({vol.Optional(CONF_CUSTOM_TARGETS, default=current): selector.ObjectSelector()})
+        return self.async_show_form(step_id="custom_targets", data_schema=schema, errors=errors)
 
     async def async_step_scoring(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:

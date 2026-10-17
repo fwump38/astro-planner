@@ -15,10 +15,12 @@ from .const import (
     CONF_BORTLE,
     CONF_CAL_BEST_MINUTES,
     CONF_CAL_MIN_ALTITUDE,
+    CONF_CUSTOM_TARGETS,
     CONF_DOME_SIGMA,
     CONF_DOME_WARNING,
     CONF_DRIVE_MINUTES,
     CONF_ENTITY,
+    CONF_FOV,
     CONF_GOOD_SCORE,
     CONF_LATITUDE,
     CONF_LIGHT_DOMES,
@@ -28,11 +30,15 @@ from .const import (
     CONF_NAME,
     CONF_NIGHTS,
     CONF_SITES,
+    CONF_TARGET_MAX_MAGNITUDE,
+    CONF_TARGET_MIN_ALTITUDE,
+    CONF_WATCH_TARGETS,
     CONF_WEIGHTS,
     DEFAULT_BORTLE,
     DEFAULTS,
 )
 from .scoring import DEFAULT_WEIGHTS
+from .targets import Target, all_targets
 
 
 @dataclass
@@ -69,6 +75,22 @@ class PlannerConfig:
     good_score_threshold: float
     auto_drive_time: bool
     manual_drive: dict[str, int] = field(default_factory=dict)
+    target_min_altitude: float = 30.0
+    target_max_magnitude: float = 12.0
+    fov_arcmin: float = 0.0  # field of view of the user's camera and scope (smaller side); 0 = don't filter by framing
+    watch_targets: tuple[str, ...] = ()  # target ids that get their own good/dropped events
+    targets: tuple[Target, ...] = ()  # every target the planner knows about (Messier, planets and the user's custom ones)
+
+    def target(self, target_id: str) -> Target | None:
+        return next((t for t in self.targets if t.id == target_id), None)
+
+    def plannable_targets(self) -> list[Target]:
+        """Targets worth ranking: bright enough, and (with a field of view set) not too big to frame."""
+        return [
+            t
+            for t in self.targets
+            if (t.magnitude is None or t.magnitude <= self.target_max_magnitude) and t.framing(self.fov_arcmin) != "too_large"
+        ]
 
     @property
     def located_sites(self) -> list[Site]:
@@ -99,6 +121,7 @@ class PlannerConfig:
         return (
             self.min_gc_altitude, self.max_moon_illumination, self.calendar_min_altitude, self.dome_sigma,
             tuple(self.domes), tuple((s.entity, s.bortle, s.observer) for s in self.sites), self.home,
+            self.target_min_altitude, self.target_max_magnitude, self.fov_arcmin, self.targets,
         )
 
 
@@ -193,4 +216,9 @@ def build_config(
         good_score_threshold=float(o[CONF_GOOD_SCORE]),
         auto_drive_time=bool(o[CONF_AUTO_DRIVE]),
         manual_drive=manual,
+        target_min_altitude=float(o[CONF_TARGET_MIN_ALTITUDE]),
+        target_max_magnitude=float(o[CONF_TARGET_MAX_MAGNITUDE]),
+        fov_arcmin=float(o[CONF_FOV]),
+        watch_targets=tuple(o.get(CONF_WATCH_TARGETS) or ()),
+        targets=tuple(all_targets(o.get(CONF_CUSTOM_TARGETS))),
     )

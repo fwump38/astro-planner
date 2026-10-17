@@ -1,4 +1,4 @@
-"""Sensors: sun-style live values for the galactic core, the Milky Way window and the moon, plus per-site scores."""
+"""Sensors: sun-style live values for the galactic core, the Milky Way window and the moon, plus site scores, the best target and meteor showers."""
 
 from __future__ import annotations
 
@@ -16,7 +16,9 @@ from .config import Site
 from .coordinator import LiveState, PlannerData
 from .entity import PlannerEntity, device_info
 from .runtime import PlannerEntry
-from .scoring import score_band
+from .scoring import TargetScore, score_band
+from .showers import is_active, outlook, upcoming
+from .targets import KIND_LABELS
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -120,13 +122,16 @@ LIVE_SENSORS: tuple[LiveDescription, ...] = (
     ),
 )
 
-DEVICE_NAMES = {"milky_way": "Milky Way", "galactic_core": "Galactic core", "moon": "Moon"}
+DEVICE_NAMES = {"milky_way": "Milky Way", "galactic_core": "Galactic core", "moon": "Moon", "planner": "Astro Planner"}
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: PlannerEntry, async_add_entities: AddConfigEntryEntitiesCallback) -> None:
     rt = entry.runtime_data
     entities: list[SensorEntity] = [LiveSensor(rt.live, entry.entry_id, d, rt.engine.config.calendar_best_minutes) for d in LIVE_SENSORS]
     entities.append(BestSiteSensor(rt.planner, entry.entry_id))
+    entities.append(BestTargetSensor(rt.planner, entry.entry_id))
+    entities += [PlannerSensor(rt.planner, entry.entry_id, d) for d in PLANNER_SENSORS]
+    entities.append(NextMeteorShowerSensor(rt.planner, entry.entry_id))
     entities += [SiteScoreSensor(rt.planner, entry.entry_id, site) for site in rt.engine.config.sites]
     async_add_entities(entities)
 
@@ -165,7 +170,7 @@ class BestSiteSensor(PlannerEntity, SensorEntity):
     def __init__(self, coordinator, entry_id: str) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry_id}_best_site"
-        self._attr_device_info = device_info(entry_id, "milky_way", "Milky Way")
+        self._attr_device_info = device_info(entry_id, "planner", "Astro Planner")
 
     def _best(self):
         data: PlannerData = self.coordinator.data
@@ -197,7 +202,7 @@ def _r(v: float | None) -> float | None:
 
 
 class SiteScoreSensor(PlannerEntity, SensorEntity):
-    _attr_translation_key = "site_score"
+    _attr_translation_key = "sky_score"
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = "mdi:star-four-points"
 
@@ -234,6 +239,10 @@ class SiteScoreSensor(PlannerEntity, SensorEntity):
                     "window_end": n.gc_end.isoformat() if n.gc_end else None,
                     "window_minutes": n.gc_minutes,
                     "light_dome_warning": sc.dome_warning,
+                    "milky_way": sc.milky_way,
+                    "sky": round(sc.sky, 3),
+                    "dark_minutes": n.dark_minutes,
+                    "best_targets": [_target_json(t) for t in data.targets.get(site.entity, {}).get(d, [])[:3]],
                 }
             )
         tonight = data.scores.get(site.entity, {}).get(data.tonight)
@@ -251,5 +260,178 @@ class SiteScoreSensor(PlannerEntity, SensorEntity):
             },
             "forecast_until": end.isoformat() if (end := data.forecast_end.get(site.entity)) else None,
             "astro_only": tonight.astro_only if tonight else None,
+            "milky_way": tonight.milky_way if tonight else None,
+            "best_targets": [_target_json(t) for t in data.targets.get(site.entity, {}).get(data.tonight, [])[:5]],
             "nights": nights,
+        }
+
+
+def _target_json(t: TargetScore) -> dict[str, Any]:
+    n = t.night
+    return {
+        "id": n.target.id,
+        "target": n.target.label,
+        "kind": n.target.kind,
+        "score": t.score,
+        "band": score_band(t.score),
+        "peak_altitude": round(n.peak_altitude),
+        "direction": n.direction,
+        "start": n.start.isoformat() if n.start else None,
+        "end": n.end.isoformat() if n.end else None,
+        "minutes": n.minutes,
+    }
+
+
+class BestTargetSensor(PlannerEntity, SensorEntity):
+    """The best target at the best site tonight, weather and moon included."""
+
+    _attr_translation_key = "best_target"
+    _attr_icon = "mdi:telescope"
+
+    def __init__(self, coordinator, entry_id: str) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry_id}_best_target"
+        self._attr_device_info = device_info(entry_id, "planner", "Astro Planner")
+
+    def _best(self):
+        data: PlannerData = self.coordinator.data
+        return data.best_target_on(data.tonight)
+
+    @property
+    def native_value(self) -> str | None:
+        b = self._best()
+        return b[1].night.target.label if b else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        data: PlannerData = self.coordinator.data
+        b = self._best()
+        attrs: dict[str, Any] = {
+            "nights": [
+                {"date": d.isoformat(), "target": best[1].night.target.label, "site": best[0].name, "entity": best[0].entity, "score": best[1].score}
+                for d in data.dates
+                if (best := data.best_target_on(d))
+            ]
+        }
+        if b:
+            site, t = b
+            attrs |= {"site": site.name, "entity": site.entity, "kind": KIND_LABELS.get(t.night.target.kind), "cloud": _r(t.cloud), "astro_only": t.astro_only, **_target_json(t)}
+            # What else is worth shooting at that site tonight.
+            attrs["alternatives"] = [_target_json(x) for x in data.targets.get(site.entity, {}).get(data.tonight, [])[1:6]]
+        return attrs
+
+
+@dataclass(frozen=True, kw_only=True)
+class PlannerDescription(SensorEntityDescription):
+    value_fn: Callable[[PlannerData], Any]
+    attrs_fn: Callable[[PlannerData], dict[str, Any]] | None = None
+
+
+def _dark(data: PlannerData):
+    return data.home_dark.get(data.tonight)
+
+
+def _messier_up(data: PlannerData):
+    return [t for t in data.home_targets.get(data.tonight, []) if t.observable and t.target.id.startswith("m") and t.target.kind != "planet"]
+
+
+PLANNER_SENSORS: tuple[PlannerDescription, ...] = (
+    PlannerDescription(
+        key="dark_hours", translation_key="dark_hours", device_class=SensorDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.MINUTES, suggested_unit_of_measurement=UnitOfTime.HOURS, suggested_display_precision=1,
+        value_fn=lambda d: dn.astro_minutes if (dn := _dark(d)) else None,
+        attrs_fn=lambda d: (
+            {
+                "night": d.tonight.isoformat(),
+                "dusk": dn.dusk.isoformat() if dn.dusk else None,
+                "dawn": dn.dawn.isoformat() if dn.dawn else None,
+            }
+            if (dn := _dark(d))
+            else {}
+        ),
+    ),
+    PlannerDescription(
+        key="moon_free_dark_hours", translation_key="moon_free_dark_hours", device_class=SensorDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.MINUTES, suggested_unit_of_measurement=UnitOfTime.HOURS, suggested_display_precision=1,
+        value_fn=lambda d: dn.moon_free_minutes if (dn := _dark(d)) else None,
+        attrs_fn=lambda d: (
+            {
+                "night": d.tonight.isoformat(),
+                "moon_illumination": round(dn.moon_illumination * 100),
+                "window_start": w[0].isoformat() if (w := dn.moon_free_window) else None,
+                "window_end": w[1].isoformat() if w else None,
+            }
+            if (dn := _dark(d))
+            else {}
+        ),
+    ),
+    PlannerDescription(
+        key="messier_tonight", translation_key="messier_tonight", icon="mdi:telescope", native_unit_of_measurement="objects",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda d: len(_messier_up(d)),
+        attrs_fn=lambda d: {
+            "night": d.tonight.isoformat(),
+            # The brightest few, not the whole list (the card and the astro_planner.visible_targets service have everything).
+            "brightest": [t.target.label for t in sorted(_messier_up(d), key=lambda t: t.target.magnitude or 99)[:10]],
+        },
+    ),
+)
+
+
+class PlannerSensor(PlannerEntity, SensorEntity):
+    entity_description: PlannerDescription
+
+    def __init__(self, coordinator, entry_id: str, description: PlannerDescription) -> None:
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._attr_unique_id = f"{entry_id}_{description.key}"
+        self._attr_device_info = device_info(entry_id, "planner", "Astro Planner")
+
+    @property
+    def native_value(self) -> Any:
+        return self.entity_description.value_fn(self.coordinator.data)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        fn = self.entity_description.attrs_fn
+        return {**(fn(self.coordinator.data) if fn else {}), "source": "computed"}
+
+
+class NextMeteorShowerSensor(PlannerEntity, SensorEntity):
+    """The next meteor shower to peak, with how good its peak night looks from here."""
+
+    _attr_translation_key = "next_meteor_shower"
+    _attr_icon = "mdi:shooting-star"
+
+    def __init__(self, coordinator, entry_id: str) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry_id}_next_meteor_shower"
+        self._attr_device_info = device_info(entry_id, "planner", "Astro Planner")
+
+    def _next(self):
+        engine = self.coordinator.engine
+        today = self.coordinator.data.tonight
+        shower, peak = upcoming(today, 1)[0]
+        return shower, peak, outlook(shower, peak, engine.home_dark(peak))
+
+    @property
+    def native_value(self) -> str:
+        return self._next()[0].name
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        shower, peak, o = self._next()
+        today = self.coordinator.data.tonight
+        return {
+            "peak_night": peak.isoformat(),
+            "days_until_peak": (peak - today).days,
+            "active": is_active(shower, today),
+            "zhr": shower.zhr,
+            "parent_body": shower.parent,
+            "radiant_peak_altitude": round(o.radiant_peak_altitude),
+            "radiant_minutes": o.radiant_minutes,
+            "moon_illumination": round(o.moon_illumination * 100),
+            "moon_free_minutes": o.moon_free_minutes,
+            "rating": o.rating,
+            "source": "computed",
         }

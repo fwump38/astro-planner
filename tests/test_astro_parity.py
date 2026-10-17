@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from custom_components.milky_way_planner.astro import LightDome, Observer, SkyOptions, compute_night, dome_geometry
+from custom_components.astro_planner.astro import LightDome, Observer, SkyOptions, compute_night, dome_geometry
 
 FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "ts-nights.json").read_text())
 SITES = [Observer(37.047, -112.527, 1500), Observer(46.2, 7.3, 500), Observer(-33.9, 18.4, 20)]

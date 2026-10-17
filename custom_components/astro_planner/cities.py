@@ -27,7 +27,7 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-USER_AGENT = "milky-way-planner (Home Assistant integration; https://github.com/fwump38/milky-way-planner)"
+USER_AGENT = "astro-planner (Home Assistant integration; https://github.com/fwump38/astro-planner)"
 GEONAMES_URL = "https://download.geonames.org/export/dump/cities1000.zip"
 GEONAMES_MEMBER = "cities1000.txt"
 WIKIDATA_URL = "https://query.wikidata.org/sparql"

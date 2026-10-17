@@ -1,6 +1,6 @@
-"""Pure astronomy for Milky Way planning (no Home Assistant imports).
+"""Pure astronomy for sky planning (no Home Assistant imports).
 
-A faithful port of the Milky Way Planner card's TypeScript (`src/astro`), so the card and
+A faithful port of the Astro Planner card's TypeScript (`src/astro`), so the card and
 this integration agree to the minute. Built on astronomy-engine.
 """
 
@@ -115,6 +115,8 @@ class NightSummary:
     dome_penalty: float
     worst_dome: DomeGeometry | None = None
     visible: list[SkySample] = field(default_factory=list)
+    astro_minutes: int = 0  # dusk to dawn (sun below -18°), whatever the moon is doing
+    ambient_dome_penalty: float = 0.0  # 0-1 average glow of the light domes across the whole sky, not just toward the core
 
     def grade(self, best_minutes: float) -> str:
         return classify_night(self.gc_minutes, best_minutes)
@@ -221,6 +223,13 @@ def dome_impact(geoms: Sequence[DomeGeometry], azimuth: float, altitude: float, 
     return 1 - math.exp(-total / 0.15), worst
 
 
+def ambient_dome_penalty(geoms: Sequence[DomeGeometry], sigma: float = 25.0, altitude: float = 35.0) -> float:
+    """Average city glow over eight compass directions at a typical imaging altitude (for targets that aren't the core)."""
+    if not geoms:
+        return 0.0
+    return sum(dome_impact(geoms, az, altitude, sigma)[0] for az in range(0, 360, 45)) / 8
+
+
 COMPASS = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"]
 
 
@@ -261,15 +270,19 @@ def solar_noon(d: date, longitude: float) -> datetime:
     return datetime(d.year, d.month, d.day, 12, tzinfo=UTC) - timedelta(hours=longitude / 15)
 
 
-def compute_night(d: date, observer: Observer, opts: SkyOptions, step_minutes: int = 10, keep_samples: bool = True) -> NightSummary:
-    """Summarise the night that begins on the evening of `d` at `observer`."""
+def night_bounds(d: date, observer: Observer) -> tuple[datetime | None, datetime | None, datetime]:
+    """Astronomical dusk and dawn (sun at -18°) for the night beginning on `d`, plus solar midnight; None when the sun never gets that low."""
     obs = observer.ae()
     noon = solar_noon(d, observer.longitude)
     dusk_t = ae.SearchAltitude(ae.Body.Sun, obs, ae.Direction.Set, to_time(noon), 1, -18)
     dawn_t = ae.SearchAltitude(ae.Body.Sun, obs, ae.Direction.Rise, dusk_t, 1, -18) if dusk_t else None
-    dusk = to_datetime(dusk_t) if dusk_t else None
-    dawn = to_datetime(dawn_t) if dawn_t else None
-    midnight = noon + timedelta(hours=12)
+    return (to_datetime(dusk_t) if dusk_t else None, to_datetime(dawn_t) if dawn_t else None, noon + timedelta(hours=12))
+
+
+def compute_night(d: date, observer: Observer, opts: SkyOptions, step_minutes: int = 10, keep_samples: bool = True) -> NightSummary:
+    """Summarise the night that begins on the evening of `d` at `observer`."""
+    obs = observer.ae()
+    dusk, dawn, midnight = night_bounds(d, observer)
 
     samples: list[SkySample] = []
     if dusk and dawn:
@@ -293,6 +306,7 @@ def compute_night(d: date, observer: Observer, opts: SkyOptions, step_minutes: i
             g, w = worst_weight.get(id(s.worst_dome), (s.worst_dome, 0.0))
             worst_weight[id(s.worst_dome)] = (g, w + s.dome_penalty)
     dome_penalty = penalty_sum / len(visible) if visible else 0.0
+    ambient = ambient_dome_penalty(opts.domes, opts.dome_sigma)
     worst: DomeGeometry | None = None
     worst_score = 0.0
     for g, w in worst_weight.values():
@@ -330,6 +344,8 @@ def compute_night(d: date, observer: Observer, opts: SkyOptions, step_minutes: i
         dome_penalty=dome_penalty,
         worst_dome=worst if dome_penalty > 0.02 else None,
         visible=visible,
+        astro_minutes=round((dawn - dusk).total_seconds() / 60) if dusk and dawn else 0,
+        ambient_dome_penalty=ambient,
     )
 
 

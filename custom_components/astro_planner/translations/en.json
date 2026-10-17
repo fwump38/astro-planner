@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "Milky Way Planner",
+        "title": "Astro Planner",
         "description": "Every AstroWeather site is selected; untick any you don't want. Coordinates are read from AstroWeather, and each site's Bortle class is estimated from nearby towns (AstroWeather doesn't provide it).",
         "data": {
           "sites": "AstroWeather sites",
@@ -22,18 +22,20 @@
       }
     },
     "abort": {
-      "single_instance_allowed": "Milky Way Planner is already set up."
+      "single_instance_allowed": "Astro Planner is already set up."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Milky Way Planner",
+        "title": "Astro Planner",
         "menu_options": {
           "sites": "Sites",
           "sky": "Sky, calendar and alert thresholds",
           "scoring": "Weather score weights",
-          "domes": "Light domes"
+          "domes": "Light domes",
+          "targets": "Targets: altitude, brightness, field of view, watch list",
+          "custom_targets": "Custom targets"
         }
       },
       "sites": {
@@ -103,10 +105,28 @@
           "dome_sigma": "Angular spread of a city's glow",
           "dome_warning_threshold": "Penalty at which a dome warning shows"
         }
+      },
+      "targets": {
+        "title": "Targets",
+        "description": "Controls which Messier objects, planets and custom targets are ranked. The field of view is the smaller side of your camera and scope's view; leave it at 0 to show everything. Watched targets (the Milky Way core included) fire their own good-night events.",
+        "data": {
+          "target_min_altitude": "Minimum altitude",
+          "target_max_magnitude": "Faintest magnitude to include",
+          "fov_arcmin": "Field of view (0 = off)",
+          "watch_targets": "Watched targets"
+        }
+      },
+      "custom_targets": {
+        "title": "Custom targets",
+        "description": "Extra objects to plan, each with a name, ra (hours as 5.59 or 05:35:17) and dec (degrees as 22.01 or +22:00:52), and optionally magnitude and size (arcminutes).",
+        "data": {
+          "custom_targets": "Custom targets"
+        }
       }
     },
     "error": {
-      "invalid_domes": "Each light dome needs a name, latitude and longitude."
+      "invalid_domes": "Each light dome needs a name, latitude and longitude.",
+      "invalid_targets": "Each custom target needs a name, a valid ra (0-24 hours) and a valid dec (-90 to 90 degrees)."
     },
     "progress": {
       "lookup": "Looking up nearby cities. The first lookup downloads the GeoNames file, which can take a minute."
@@ -148,9 +168,6 @@
       "best_site": {
         "name": "Best site tonight"
       },
-      "site_score": {
-        "name": "Milky Way score"
-      },
       "gc_elevation": {
         "name": "Elevation"
       },
@@ -182,6 +199,24 @@
       },
       "moon_illumination": {
         "name": "Illumination"
+      },
+      "sky_score": {
+        "name": "Sky score"
+      },
+      "best_target": {
+        "name": "Best target tonight"
+      },
+      "dark_hours": {
+        "name": "Dark hours tonight"
+      },
+      "moon_free_dark_hours": {
+        "name": "Moon-free dark hours tonight"
+      },
+      "messier_tonight": {
+        "name": "Messier objects up tonight"
+      },
+      "next_meteor_shower": {
+        "name": "Next meteor shower"
       }
     },
     "binary_sensor": {
@@ -198,6 +233,12 @@
       },
       "short_nights": {
         "name": "Short-window nights"
+      },
+      "moonless_nights": {
+        "name": "Moonless nights"
+      },
+      "meteor_showers": {
+        "name": "Meteor showers"
       }
     },
     "event": {
@@ -209,7 +250,9 @@
               "window_start": "Core window opens",
               "window_end": "Core window closes",
               "forecast_good": "Night forecast to be good",
-              "forecast_dropped": "Night no longer looks good"
+              "forecast_dropped": "Night no longer looks good",
+              "target_good": "Watched target forecast to be good",
+              "target_dropped": "Watched target no longer looks good"
             }
           }
         }
@@ -219,8 +262,9 @@
   "selector": {
     "min_grade": {
       "options": {
-        "best": "Full-length windows only (pink)",
-        "short": "Include short windows (blue)"
+        "best": "Full-length Milky Way windows only (pink)",
+        "short": "Include short windows (blue)",
+        "any": "Any night (rank by sky quality, Milky Way or not)"
       }
     },
     "sort": {
@@ -229,12 +273,27 @@
         "date": "Soonest first",
         "window": "Longest window first"
       }
+    },
+    "target_kind": {
+      "options": {
+        "galaxy": "Galaxies",
+        "globular_cluster": "Globular clusters",
+        "open_cluster": "Open clusters",
+        "planetary_nebula": "Planetary nebulae",
+        "nebula": "Nebulae",
+        "supernova_remnant": "Supernova remnants",
+        "star_cloud": "Star clouds",
+        "double_star": "Double stars",
+        "asterism": "Asterisms",
+        "planet": "Planets",
+        "custom": "Custom targets"
+      }
     }
   },
   "services": {
     "best_night": {
       "name": "Best night",
-      "description": "Finds the best upcoming nights for the Milky Way core, ranking your sites using the weather forecast. Returns the result as response data.",
+      "description": "Finds the best upcoming nights, ranking your sites by sky quality and the weather forecast, with the Milky Way core lifting a night's score when it's up. Returns the result as response data.",
       "fields": {
         "days": {
           "name": "Days to search",
@@ -246,7 +305,7 @@
         },
         "min_grade": {
           "name": "Minimum grade",
-          "description": "Pink nights only, or include blue (short-window) nights."
+          "description": "Pink Milky Way nights only, include blue (short-window) nights, or any night regardless of the Milky Way."
         },
         "min_score": {
           "name": "Minimum score",
@@ -267,6 +326,28 @@
         "include_sites": {
           "name": "Include every site",
           "description": "Add the full site ranking for each night."
+        }
+      }
+    },
+    "visible_targets": {
+      "name": "Visible targets",
+      "description": "Lists the Messier objects, planets and custom targets that are up after dark at the Home Assistant location, with how long, how high and which direction. Returns the result as response data.",
+      "fields": {
+        "days": {
+          "name": "Nights",
+          "description": "How many nights to look at, starting with the first."
+        },
+        "start": {
+          "name": "Start date",
+          "description": "First night. Defaults to tonight."
+        },
+        "kinds": {
+          "name": "Kinds",
+          "description": "Only these kinds of object (all by default)."
+        },
+        "min_minutes": {
+          "name": "Minimum time up",
+          "description": "Skip targets that are above the minimum altitude in the dark for less than this."
         }
       }
     }

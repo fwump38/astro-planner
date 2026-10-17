@@ -6,9 +6,9 @@ from pathlib import Path
 import pytest
 from homeassistant.core import HomeAssistant
 
-from custom_components.milky_way_planner import cities
-from custom_components.milky_way_planner.astro import Observer
-from custom_components.milky_way_planner.cities import (
+from custom_components.astro_planner import cities
+from custom_components.astro_planner.astro import Observer
+from custom_components.astro_planner.cities import (
     CityLookupError,
     Place,
     async_find_domes,
@@ -99,7 +99,7 @@ async def test_lookup_uses_geonames_first_and_caches_the_dump(hass: HomeAssistan
     result = await async_find_domes(hass, [CHACO, ABIQUIU], 250)
     assert result.source == "geonames"
     assert {d.name for d in result.domes} == {"Albuquerque", "Santa Fe"}
-    assert aioclient_mock.mock_calls[0][3]["User-Agent"].startswith("milky-way-planner")
+    assert aioclient_mock.mock_calls[0][3]["User-Agent"].startswith("astro-planner")
     assert no_cache.exists()
     # Second lookup reads the cached dump: no further request.
     await async_find_domes(hass, [CHACO], 250)
@@ -132,7 +132,7 @@ async def test_options_flow_finds_and_stores_domes(hass: HomeAssistant, aioclien
     from homeassistant.data_entry_flow import FlowResultType
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-    from custom_components.milky_way_planner.const import DOMAIN
+    from custom_components.astro_planner.const import DOMAIN
 
     aioclient_mock.get(cities.GEONAMES_URL, content=_zip(SAMPLE))
     entry = MockConfigEntry(domain=DOMAIN, unique_id=DOMAIN, data={}, options={"sites": [], "light_domes": [{"name": "Manual", "latitude": 35, "longitude": -106, "population": 5000}]})
@@ -159,7 +159,7 @@ async def test_options_flow_reports_lookup_failure(hass: HomeAssistant, aioclien
     from homeassistant.data_entry_flow import FlowResultType
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-    from custom_components.milky_way_planner.const import DOMAIN
+    from custom_components.astro_planner.const import DOMAIN
 
     aioclient_mock.get(cities.GEONAMES_URL, status=500)
     aioclient_mock.get(cities.WIKIDATA_URL, status=500)
@@ -178,7 +178,7 @@ async def test_options_flow_reports_lookup_failure(hass: HomeAssistant, aioclien
 async def test_websocket_lookup_and_stored_domes(hass: HomeAssistant, hass_ws_client, aioclient_mock, no_cache, hass_admin_user):
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-    from custom_components.milky_way_planner.const import DOMAIN
+    from custom_components.astro_planner.const import DOMAIN
 
     stored = [{"name": "Albuquerque", "latitude": 35.0844, "longitude": -106.6511, "population": 600000}]
     entry = MockConfigEntry(domain=DOMAIN, unique_id=DOMAIN, data={}, options={"sites": [], "light_domes": stored, "light_domes_info": {"source": "geonames"}})
@@ -186,10 +186,10 @@ async def test_websocket_lookup_and_stored_domes(hass: HomeAssistant, hass_ws_cl
     assert await hass.config_entries.async_setup(entry.entry_id)
     aioclient_mock.get(cities.GEONAMES_URL, content=_zip(SAMPLE))
     client = await hass_ws_client(hass)
-    await client.send_json_auto_id({"type": "milky_way_planner/light_domes"})
+    await client.send_json_auto_id({"type": "astro_planner/light_domes"})
     res = (await client.receive_json())["result"]
     assert res["domes"] == stored and res["info"] == {"source": "geonames"}
-    await client.send_json_auto_id({"type": "milky_way_planner/find_light_domes", "points": [{"latitude": 36.06, "longitude": -107.96}], "radius_km": 250})
+    await client.send_json_auto_id({"type": "astro_planner/find_light_domes", "points": [{"latitude": 36.06, "longitude": -107.96}], "radius_km": 250})
     res = (await client.receive_json())["result"]
     assert res["source"] == "geonames" and {d["name"] for d in res["domes"]} == {"Albuquerque", "Santa Fe"}
 

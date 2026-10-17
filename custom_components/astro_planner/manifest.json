@@ -1,6 +1,6 @@
 {
-  "domain": "milky_way_planner",
-  "name": "Milky Way Planner",
+  "domain": "astro_planner",
+  "name": "Astro Planner",
   "after_dependencies": [
     "weather",
     "astroweather"
@@ -10,13 +10,13 @@
   ],
   "config_flow": true,
   "dependencies": [],
-  "documentation": "https://github.com/fwump38/milky-way-planner",
+  "documentation": "https://github.com/fwump38/astro-planner",
   "integration_type": "service",
   "iot_class": "calculated",
-  "issue_tracker": "https://github.com/fwump38/milky-way-planner/issues",
+  "issue_tracker": "https://github.com/fwump38/astro-planner/issues",
   "requirements": [
     "astronomy-engine==2.1.19"
   ],
   "single_config_entry": true,
-  "version": "0.3.1"
+  "version": "0.4.0"
 }

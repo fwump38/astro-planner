@@ -7,26 +7,23 @@ from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.milky_way_planner.const import DOMAIN
+from custom_components.astro_planner.const import DOMAIN
+from custom_components.astro_planner.scoring import night_hours
 
 from .test_integration import SITE, setup  # noqa: F401
 
 
 async def test_forecast_events_fire_on_threshold_crossings(hass: HomeAssistant, setup):  # noqa: F811
     """A night turning good fires `forecast_good`; turning bad again fires `forecast_dropped`."""
-    from custom_components.milky_way_planner.coordinator import PlannerCoordinator
+    from custom_components.astro_planner.coordinator import PlannerCoordinator
 
     planner: PlannerCoordinator = setup.runtime_data.planner
     tonight = planner.data.tonight
     night = planner.engine.site_night(planner.config.sites[0], tonight)
-    if not night.visible:
-        pytest.skip("no core tonight at this time of year")
+    times = [s.time for s in night.visible] or night_hours(night)  # the core window, or the whole dark night out of season
 
     def rows(q):
-        return [
-            {"datetime": s.time.isoformat(), "cloudless_percentage": q, "transparency_percentage": q, "seeing_percentage": q, "calm_percentage": q}
-            for s in night.visible
-        ]
+        return [{"datetime": t.isoformat(), "cloudless_percentage": q, "transparency_percentage": q, "seeing_percentage": q, "calm_percentage": q} for t in times]
 
     state = {"rows": rows(5)}
     hass.services.async_remove("weather", "get_forecasts")
@@ -40,13 +37,14 @@ async def test_forecast_events_fire_on_threshold_crossings(hass: HomeAssistant, 
     state["rows"] = rows(100)
     await planner.async_refresh()
     await hass.async_block_till_done()
-    assert hass.states.get("event.milky_way_events").attributes["event_type"] == "forecast_good"
-    assert hass.states.get("event.milky_way_events").attributes["site"] == "Kanab"
+    assert hass.states.get("event.astro_planner_events").attributes["event_type"] == "forecast_good"
+    assert hass.states.get("event.astro_planner_events").attributes["site"] == "Kanab"
+    assert hass.states.get("event.astro_planner_events").attributes["best_target"]  # says what to shoot, not just "go"
 
     state["rows"] = rows(5)
     await planner.async_refresh()
     await hass.async_block_till_done()
-    assert hass.states.get("event.milky_way_events").attributes["event_type"] == "forecast_dropped"
+    assert hass.states.get("event.astro_planner_events").attributes["event_type"] == "forecast_dropped"
 
 
 async def test_window_events_are_scheduled(hass: HomeAssistant, setup, freezer):  # noqa: F811
@@ -56,7 +54,7 @@ async def test_window_events_are_scheduled(hass: HomeAssistant, setup, freezer):
     freezer.move_to(nxt + timedelta(seconds=2))
     async_fire_time_changed(hass, nxt + timedelta(seconds=2))
     await hass.async_block_till_done()
-    assert hass.states.get("event.milky_way_events").attributes["event_type"] == "window_start"
+    assert hass.states.get("event.astro_planner_events").attributes["event_type"] == "window_start"
 
 
 async def test_config_flow_creates_entry_with_site_details(hass: HomeAssistant):
@@ -114,3 +112,55 @@ async def test_options_flow_updates_thresholds(hass: HomeAssistant, setup):  # n
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"]["calendar_best_minutes"] == 120
     assert result["data"]["sites"][0]["entity"] == SITE  # other options are preserved
+
+
+async def test_watched_target_fires_its_own_events(hass: HomeAssistant, setup):  # noqa: F811
+    planner = setup.runtime_data.planner
+    ranked = planner.data.targets[SITE][planner.data.tonight]
+    if not ranked:
+        pytest.skip("nothing is up at this site tonight")
+    watched = ranked[0].night.target
+    hass.config_entries.async_update_entry(setup, options={**setup.options, "watch_targets": [watched.id]})
+    await hass.config_entries.async_reload(setup.entry_id)
+    await hass.async_block_till_done()
+    planner = setup.runtime_data.planner
+    tn = next(t.night for t in planner.data.targets[SITE][planner.data.tonight] if t.night.target.id == watched.id)
+
+    def rows(q):
+        return [{"datetime": t.isoformat(), "cloudless_percentage": q, "transparency_percentage": q, "seeing_percentage": q, "calm_percentage": q} for t in tn.times]
+
+    state = {"rows": rows(5)}
+    hass.services.async_remove("weather", "get_forecasts")
+
+    async def fc(call):
+        return {SITE: {"forecast": state["rows"]}}
+
+    hass.services.async_register("weather", "get_forecasts", fc, supports_response=SupportsResponse.ONLY)
+    await planner.async_refresh()
+    state["rows"] = rows(100)
+    await planner.async_refresh()
+    await hass.async_block_till_done()
+    # With several events in one update the entity keeps the last; the target event comes after the site ones.
+    attrs = hass.states.get("event.astro_planner_events").attributes
+    assert attrs["event_type"] == "target_good" and attrs["target_id"] == watched.id and attrs["target"] == watched.label
+    state["rows"] = rows(5)
+    await planner.async_refresh()
+    await hass.async_block_till_done()
+    assert hass.states.get("event.astro_planner_events").attributes["event_type"] in ("target_dropped", "forecast_dropped")
+
+
+async def test_options_flow_targets_and_custom_targets(hass: HomeAssistant, setup):  # noqa: F811
+    result = await hass.config_entries.options.async_init(setup.entry_id)
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {"next_step_id": "targets"})
+    assert result["step_id"] == "targets"
+    values = {"target_min_altitude": 40, "target_max_magnitude": 9, "fov_arcmin": 90, "watch_targets": ["milky_way", "m31"]}
+    result = await hass.config_entries.options.async_configure(result["flow_id"], values)
+    assert result["type"] is FlowResultType.CREATE_ENTRY and result["data"]["fov_arcmin"] == 90 and result["data"]["watch_targets"] == ["milky_way", "m31"]
+
+    result = await hass.config_entries.options.async_init(setup.entry_id)
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {"next_step_id": "custom_targets"})
+    bad = await hass.config_entries.options.async_configure(result["flow_id"], {"custom_targets": [{"name": "Oops", "ra": "99", "dec": "0"}]})
+    assert bad["type"] is FlowResultType.FORM and bad["errors"] == {"base": "invalid_targets"}
+    good = await hass.config_entries.options.async_configure(result["flow_id"], {"custom_targets": [{"name": "NGC 7000", "ra": "20:59:17", "dec": "+44:31:44"}]})
+    assert good["type"] is FlowResultType.CREATE_ENTRY and good["data"]["custom_targets"][0]["name"] == "NGC 7000"
+
