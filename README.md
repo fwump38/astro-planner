@@ -21,7 +21,8 @@ no API key).
 2. Install **Astro Planner** and restart Home Assistant.
 3. **Settings → Devices & services → Add integration → Astro Planner**. Every AstroWeather site is pre-selected; untick any you
    don't want. Tick **Review each site's details** only if you want to set a name, Bortle class, drive time or coordinates yourself.
-   Everything else is under **Configure**.
+   Everything else is under **Configure**. **Edit all sites as a list** shows every site's details as one list, which is also a quick way to back up
+   or restore them.
 
 **Where site values come from.** Coordinates are read from AstroWeather. The Bortle class is *estimated* from nearby towns
 (GeoNames, Walker's law), which is rough: it ignores industry, roads and terrain, so set the Bortle class yourself in the site's

@@ -63,6 +63,33 @@ def discover_sites(hass: HomeAssistant) -> list[str]:
     return sorted(e.entity_id for e in reg.entities.values() if e.platform == "astroweather" and e.domain == "weather" and not e.disabled)
 
 
+_SITE_NUMBERS = (CONF_BORTLE, CONF_DRIVE_MINUTES, CONF_LATITUDE, CONF_LONGITUDE)
+
+
+def clean_sites(rows: list[dict[str, Any]]) -> list[dict[str, Any]] | None:
+    """Validate a hand-edited site list: each needs a weather entity; numbers must be in range; unknown keys are dropped."""
+    out: list[dict[str, Any]] = []
+    try:
+        for row in rows:
+            entity = str(row[CONF_ENTITY])
+            if not entity.startswith("weather."):
+                return None
+            site: dict[str, Any] = {CONF_ENTITY: entity}
+            if row.get(CONF_NAME):
+                site[CONF_NAME] = str(row[CONF_NAME])
+            for key in _SITE_NUMBERS:
+                if row.get(key) not in (None, ""):
+                    site[key] = float(row[key]) if key in (CONF_LATITUDE, CONF_LONGITUDE) else int(row[key])
+            if not 1 <= site.get(CONF_BORTLE, 1) <= 9 or not -90 <= site.get(CONF_LATITUDE, 0) <= 90 or not -180 <= site.get(CONF_LONGITUDE, 0) <= 180:
+                return None
+            if (CONF_LATITUDE in site) != (CONF_LONGITUDE in site):
+                return None
+            out.append(site)
+    except (KeyError, TypeError, ValueError):
+        return None
+    return out
+
+
 class SitesFlowMixin:
     """Pick AstroWeather sites, then ask for each site's details."""
 
@@ -140,7 +167,7 @@ class AstroPlannerConfigFlow(SitesFlowMixin, ConfigFlow, domain=DOMAIN):
 
 class AstroPlannerOptionsFlow(SitesFlowMixin, OptionsFlow):
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        return self.async_show_menu(step_id="init", menu_options=["sites", "sky", "targets", "custom_targets", "scoring", "domes"])
+        return self.async_show_menu(step_id="init", menu_options=["sites", "edit_sites", "sky", "targets", "custom_targets", "scoring", "domes"])
 
     def _save(self, **changes: Any) -> ConfigFlowResult:
         return self.async_create_entry(data={**self.config_entry.options, **changes})
@@ -159,6 +186,19 @@ class AstroPlannerOptionsFlow(SitesFlowMixin, OptionsFlow):
 
     async def _sites_done(self) -> ConfigFlowResult:
         return self._save(**{CONF_SITES: self._sites})
+
+    async def async_step_edit_sites(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """All sites and their details as one list, to edit, back up or restore in a single step."""
+        errors: dict[str, str] = {}
+        current = self.config_entry.options.get(CONF_SITES, [])
+        if user_input is not None:
+            cleaned = clean_sites(user_input.get(CONF_SITES) or [])
+            if cleaned is None:
+                errors["base"] = "invalid_sites"
+            else:
+                return self._save(**{CONF_SITES: cleaned})
+        schema = vol.Schema({vol.Optional(CONF_SITES, default=current): selector.ObjectSelector()})
+        return self.async_show_form(step_id="edit_sites", data_schema=schema, errors=errors)
 
     # -- sky and calendar thresholds -----------------------------------------------------------
 

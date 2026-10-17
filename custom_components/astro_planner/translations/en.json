@@ -23,7 +23,8 @@
     },
     "abort": {
       "single_instance_allowed": "Astro Planner is already set up."
-    }
+    },
+    "error": {}
   },
   "options": {
     "step": {
@@ -35,7 +36,8 @@
           "scoring": "Weather score weights",
           "domes": "Light domes",
           "targets": "Targets: altitude, brightness, field of view, watch list",
-          "custom_targets": "Custom targets"
+          "custom_targets": "Custom targets",
+          "edit_sites": "Edit all sites as a list"
         }
       },
       "sites": {
@@ -122,11 +124,19 @@
         "data": {
           "custom_targets": "Custom targets"
         }
+      },
+      "edit_sites": {
+        "title": "Edit sites",
+        "description": "One entry per site: `entity` (an AstroWeather weather entity) plus optional `name`, `bortle` (1-9), `drive_minutes`, and `latitude` and `longitude` together. Leave out anything you want read from AstroWeather or estimated. Handy for backing up or restoring your sites.",
+        "data": {
+          "sites": "Sites"
+        }
       }
     },
     "error": {
       "invalid_domes": "Each light dome needs a name, latitude and longitude.",
-      "invalid_targets": "Each custom target needs a name, a valid ra (0-24 hours) and a valid dec (-90 to 90 degrees)."
+      "invalid_targets": "Each custom target needs a name, a valid ra (0-24 hours) and a valid dec (-90 to 90 degrees).",
+      "invalid_sites": "Each site needs a weather.* entity; Bortle must be 1-9, latitude and longitude must be given together and be valid numbers."
     },
     "progress": {
       "lookup": "Looking up nearby cities. The first lookup downloads the GeoNames file, which can take a minute."

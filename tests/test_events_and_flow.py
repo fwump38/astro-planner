@@ -164,3 +164,30 @@ async def test_options_flow_targets_and_custom_targets(hass: HomeAssistant, setu
     good = await hass.config_entries.options.async_configure(result["flow_id"], {"custom_targets": [{"name": "NGC 7000", "ra": "20:59:17", "dec": "+44:31:44"}]})
     assert good["type"] is FlowResultType.CREATE_ENTRY and good["data"]["custom_targets"][0]["name"] == "NGC 7000"
 
+
+
+async def test_options_flow_edit_sites_as_a_list(hass: HomeAssistant, setup):  # noqa: F811
+    result = await hass.config_entries.options.async_init(setup.entry_id)
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {"next_step_id": "edit_sites"})
+    assert result["step_id"] == "edit_sites"
+    rows = [
+        {"entity": SITE, "name": "Kanab", "bortle": "2", "drive_minutes": 95, "latitude": 37.047, "longitude": -112.527, "junk": 1},
+        {"entity": "weather.astroweather_other", "bortle": 4},
+    ]
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {"sites": rows})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"]["sites"] == [
+        {"entity": SITE, "name": "Kanab", "bortle": 2, "drive_minutes": 95, "latitude": 37.047, "longitude": -112.527},
+        {"entity": "weather.astroweather_other", "bortle": 4},
+    ]
+
+
+@pytest.mark.parametrize(
+    "rows",
+    [[{"name": "no entity"}], [{"entity": "sensor.nope"}], [{"entity": "weather.a", "bortle": 12}], [{"entity": "weather.a", "latitude": 36}], [{"entity": "weather.a", "latitude": 95, "longitude": 0}], [{"entity": "weather.a", "bortle": "x"}]],
+)
+async def test_edit_sites_rejects_bad_rows(hass: HomeAssistant, setup, rows):  # noqa: F811
+    result = await hass.config_entries.options.async_init(setup.entry_id)
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {"next_step_id": "edit_sites"})
+    bad = await hass.config_entries.options.async_configure(result["flow_id"], {"sites": rows})
+    assert bad["type"] is FlowResultType.FORM and bad["errors"] == {"base": "invalid_sites"}
